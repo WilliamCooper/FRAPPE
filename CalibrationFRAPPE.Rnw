@@ -1,0 +1,396 @@
+
+\documentclass[12pt,english]{report}
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\usepackage[letterpaper]{geometry}
+\geometry{verbose,tmargin=3.54cm,bmargin=2.54cm,lmargin=2.54cm,rmargin=2.54cm,headheight=1cm,headsep=2cm,footskip=0.5cm}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\parskip}{\medskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{color}
+
+\makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LyX specific LaTeX commands.
+%% Because html converters don't know tabularnewline
+\providecommand{\tabularnewline}{\\}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% User specified LaTeX commands.
+\input colordvi
+\usepackage{color}
+\fancyhead{}
+\fancyfoot[CE,CO]{}
+\newtoks{\addressee} \global\addressee={}
+\newdimen\longindent \longindent=3.5truein
+\fancyhead[L]{Memo to: \the\addressee \\ \datetoday \\ Page \thepage \hfill}
+\renewcommand{\headrulewidth}{0.0pt}
+\newenvironment{lyxlist}[1]
+{\begin{list}{}
+{\settowidth{\labelwidth}{#1}
+\setlength{\leftmargin}{\labelwidth}
+\addtolength{\leftmargin}{\labelsep}
+\renewcommand{\makelabel}[1]{##1\hfil}}}
+{\end{list}}
+\newcommand{\datetoday}{\number\day\space
+     \ifcase\month\or January\or February\or March\or April\or May\or
+     June\or July\or August\or September\or October\or November\or
+     December\fi
+     \space\number\year}
+\newcommand{\EOLmemo}{\null \vskip-1.5truein
+{\raggedright \textsf{\textsc{\large \textcolor{blue}{Earth Observing Laboratory}}}}\par
+{\raggedright \textsf{\textsl{\textcolor{blue}{Memorandum:}}}} \par \vskip6pt
+{\color{blue}{\hrule}}\par
+\vskip0.3truein \leftline{\hskip \longindent \datetoday} \vskip0.2truein
+\thispagestyle{empty}}
+\newcommand{\attachm}[1]{\begin{lyxlist}{Attachments:00}
+\item [Attachments:] {#1}
+\end{lyxlist}}
+\newcommand{\cc}[1]{\begin{lyxlist}{Attachments:00}
+\item [cc:] {#1}
+\end{lyxlist}}
+\newcommand{\attach}[1]{\begin{lyxlist}{Attachments:00}
+\item [Attachment:] {#1}
+\end{lyxlist}}
+%usage: \encl{A\\B\\C} or \cc{ma,e1\\name2\\name3}
+
+\makeatother
+
+\usepackage{babel}
+\begin{document}
+\EOLmemo 
+
+\global\addressee={FRAPPE field catalog}% change "File" to the "To:" name
+
+\begin{tabular}{ll}
+\textsf{\textsc{\textcolor{blue}{To:}}} & \the\addressee\tabularnewline
+\textsf{\textsc{\textcolor{blue}{From:}}} & Al Cooper\tabularnewline
+ \textsf{\textsc{\textcolor{blue}{Subject:}}} & Calibration results for the radome, FRAPPE\tabularnewline
+\end{tabular}
+
+\bigskip
+
+Reference: Data file used: /scr/raf\_data/FRAPPE/FRAPPErf04.nc as on the date of this memo. Program that generates this memo and constructs the plots used here: on EOL file space, \\$\tilde$ cooperw/RStudio/FRAPPE/CalibrationFRAPPE.Rnw. If this file is run using the RStudio interface on tikal, using the "Compile PDF" function, it will produce this memo.                                                         
+                                                                     
+                                                                     %
+                                                                     
+                                                                     FRAPPE flight RF04,  29 July 2014, included some calibration maneuvers that are used here to determine a calibration for the new radome on the C-130 for this project. There were yaw maneuvers from 15:45:10--15:46:50, pitch maneuvers from 15:40:00--15:43:10, and a speed run from 15:50:00--15:55:00 (with a small heading change during the maneuver). All were 
+flown at about 15,500 ft.
+                                                                     
+                                                                     \section*{Calibration of the Angle of Attack}
+\subsection*{The basis for calibration}
+                                                                     
+                                                                     
+The first-order expression for the vertical wind $w$ is
+                                                                     
+                                                                     \begin{equation}
+                                                                     w=V\sin(\alpha-\phi)+w_{p}\label{eq:VWind}
+                                                                     \end{equation}
+                                                                     
+                                                                     
+                                                                     where $V$ is the true airspeed, $\alpha$ the angle of attack, $\phi$
+                                                                       the pitch, and $w_{p}$ the vertical motion or rate-of-climb of the
+                                                                     aircraft. The solution for the angle-of-attack is
+                                                                     
+                                                                     \begin{equation}
+                                                                     \alpha=\phi+\arcsin\frac{w-w_{p}}{V}\label{eq:SolvedForAOA}
+                                                                     \end{equation}
+                                                                     
+                                                                     
+If it is reasonable to assume that $w$ is zero, or that it averages
+to zero, then 
+                                                                     
+                                                                     \begin{equation}                                                                 \alpha^*=\phi-\arcsin\frac{w_{p}}{V}\label{eq:alphaWithwZero}                                                     \end{equation}
+                                                                     
+                                                                                                                                          can be used as a reference angle-of-attack to which to fit a parameterized equation. Even in the presence of waves, fitting to this as functions of the radome measurements and                                                                     other flight characteristics should average any real effects of vertical                                                     wind as long as the vertical wind over the flight segments used averages                                                          to zero.
+                                                                     
+In the case of the radome, the relevant variables are 
+                                                                     $\phi$=PITCH, $w_{p}=$VSPD, and $V=$TASX. The radome provides the pressure difference                                                                      (ADIFR) between top and bottom ports on the radome, and to measure angle of attack this pressure                                                                      is usually normalized by some measure of dynamic pressure like QCXC                                                                      or QCRC. The former is preferable because the latter is sometimes                                                                     affected by icing or freezing of accumulated water even when ADIFR                                                                continues to function. 
+                                                                     
+                                   
+                                                                     
+Calibration of the angle-of-attack then requires determining a function                                                                     $f(\{x_{i}\})$ of measured quantities that matches $\alpha^*$ determined                                                                     from (\ref{eq:alphaWithwZero}). Possible terms $\{x_{i}\}$ in that function                                                                        may include ADIFR and related measurements of pressure as well as                                                            Mach number, attitude angles of the pod, etc.
+                                                                                                                                        
+
+                                                                     
+<<Initialization,echo=FALSE,include=F>>=
+require(Ranadu)
+library(knitr)
+require(ggplot2)
+require(ggthemes)
+# set global chunk options
+opts_chunk$set(fig.path='figure/GP-', fig.align='center', fig.show='hold')
+options(replace.assign=TRUE,width=49)
+
+
+@ 
+
+
+
+<<getData,echo=F,include=F>>=
+
+Flight <- "rf04"        # this was the flight with cal maneuvers
+Project = "FRAPPE"
+fname = sprintf("/home/Data/%s/%s%s.nc", Project,Project,Flight)
+print(fname)
+VarNames <- c("VYC","GGALT","LATC", "LONC", "PSXC", "QCXC",
+              "WDC", "WSC", "GGVEW", "GGVNS", "VEW", "VNS", "TASX",
+              "ADIFR", "AKRD", "SSLIP", "PITCH", "GGTRK",
+              "ROLL", "THDG", "BDIFR", "EWX", "WIC",
+              "VSPD", "ATX")
+Data <- getNetCDF (fname, VarNames)      # this handles high-rate data also
+capnF1 <- "The angle-of-attack determined from the fit, as a function of the reference angle provided by Equation (3), for the speed run from FRAPPE RF04, 15:50--15:55."
+
+@
+
+\subsection*{Application to the radome}
+
+The best method for calibrating angle-of-attack is through the use
+of speed runs. In this maneuver, the aircraft is slowed to a speed
+near the lower range of its operating range, then accelerated to near
+the upper limit, and then slow again to normal cruise. If this is
+done while flying a level track, the angle of attack will vary through
+its normal range and the pitch will vary similarly. If there is no
+vertical wind or if a fluctuating vertical wind averages to zero,
+(\ref{eq:alphaWithwZero}) then can be used to provide a reference
+angle $\alpha$ for calibration. 
+
+% However, any flight segment can be used provided that the mean vertical wind is zero (or, to be clear, that the mean vertical wind in each subset of data characterized by different properties entering the fit is zero). Therefore the following fit will use two datasets, one from only the speed run and the second from the entire part of RF04 during which the true airspeed exceeded 100 m/s.
+
+
+
+The sensitivity to the pressure difference between vertically separated
+ports is the most important part of the calibration of angle of attack.
+Secondary terms may be needed to adjust the value to maintain a correct
+zero. Therefore, the fit can be done in two steps. First, the  speed
+run(s) alone are used to determine the sensitivity to the pressure
+ratio, and then that coefficient is fixed and additional terms, perhaps including Mach number and some pressure dependence, are considered to maintain a proper zero vertical wind through the operating range of the aircraft. The first fit then is to the following simplified
+equation:
+
+\begin{equation}
+\alpha=c_{0}^{*}+c_{1}^{*}\frac{\Delta p_{\alpha}}{q}\label{eq:AOAsens1term}
+\end{equation}
+A fit to this equation, for the measurements from the speed run, gave coefficients $c_{0}^{*}$ and $c_{1}^{*}$ equal to 4.80
+and 12.715, as shown in the following figure and tabulated in the following summary of the fit:
+
+<<AOA-fit-and-plot, fig.cap=capnF1,out.width="300pt",fig.align="center", echo=F>>=
+r <- setRange (Data$Time, 155000, 155500)
+DataP <- Data[r,]
+Valid <- (DataP$TASX > 100.)
+DataV <- DataP[Valid,]
+attach(DataV)
+Cradeg <- pi / 180.
+Mach <- MachNumber (PSXC, QCXC)  # uses conventional q, p
+AOAREF <- PITCH - asin(VSPD/TASX) / Cradeg
+AQR <- ADIFR/QCXC # basic pressure ratio for AOA
+fmy <- lm(AOAREF~AQR)
+summary(fmy)
+cfr <- coefficients (fmy)
+A1 <- cfr[1]+cfr[2]*AQR
+plot (AOAREF, A1, pch=16, cex=0.8, col='blue', xlab="Ref. AOA", ylab="fit AOA")
+lines (c(-3.,6.), c(-3.,6.), lty=2, lwd=3, col='darkorange')
+# detach(DataV)
+# DataP <- Data
+# Valid <- (DataP$TASX > 100.)
+# DataV <- DataP[Valid,]
+# attach(DataV)
+# Cradeg <- pi / 180.
+# Mach <- MachNumber (PSXC, QCXC)  # uses conventional q, p
+# AOAREF <- PITCH - asin(VSPD/TASX) / Cradeg
+# AQR <- ADIFR/QCXC # basic pressure ratio for AOA
+# fmy <- lm(AOAREF~AQR)
+# summary(fmy)
+# cfr <- coefficients (fmy)
+# A1f <- cfr[1]+cfr[2]*AQR
+# plot (AOAREF, A1f, pch=16, cex=0.8, col='blue', xlab="Ref. AOA", ylab="fit AOA")
+# lines (c(-3.,6.), c(-3.,6.), lty=2, lwd=3, col='darkorange')
+capnF1b <- "The angle of attack determined from the simple fit to the pressure ratio from the radome, compared to the standard variable AKRD used for preliminary processing. The dashed orange line is a 1:1 reference line and shows that the new calibration would produce values for the angle-of-attack significantly different from that produced by current processing."
+
+@
+The fit accounted for >99\% of the variance and had a residual standard error of 0.12$^\circ$, so it represented the speed run well. For comparison, the standard coefficients in use as of the date of this memo  were  \{5.776, 15.039\}. The new radome is thus significantly different from the old one, as shown in Fig.\ 2.
+
+<<AOA-vs-old-AOA, fig.cap=capnF1b,echo=F>>=
+Ax <- 
+plot (AKRD, A1, pch=16, cex=0.8, col='blue', xlab="Standard AKRD", ylab="fit AOA")
+lines (c(-3.,6.), c(-3.,6.), lty=2, lwd=3, col='darkorange')
+capnF3 <- "The sideslip attack determined from the fit, as a function of the reference angle provided by Equation (9), for the data from FRAPPE flight RF04, 154510--154650."
+
+@
+
+
+\section*{Calibration of the Sideslip Angle}
+
+Calibration of the sideslip angle is more difficult, both because
+the equations are more complicated and because the maneuver is very
+hard to fly. Ideally, the sideslip maneuver should only change yaw
+angle and heading without change in roll, altitude, or angle-of-attack,
+but that is impossible. It is practical, however, to minimize roll
+and change in altitude, and that was how these maneuvers were flown.
+For yaw maneuvers,
+the calibration is based on the expectation that the horizontal wind
+remains constant. The first-order equations for the east and north
+components of the wind, $u$ and $v$, are:
+
+\begin{eqnarray}
+u & = & -U_{a}\sin(\Psi+\beta)+u_{p}\nonumber \\
+v & = & -U_{a}\cos(\Psi+\beta)+v_{p}\label{eq:horizWindeqs}
+\end{eqnarray}
+where $U_{a}$ is the true airspeed, $\Psi$ the heading, $\beta$
+the sideslip angle, and $u_{p}$ and $v_{p}$ are the eastward and
+northward ground-speed components of the aircraft. These two equations
+lead to the following reference formula for $\beta$:
+
+\begin{equation}
+\beta^{*}=-\Psi+\arctan\left(\frac{u_{p}-u}{v_{p}-v}\right)\label{eq:beta-equation}
+\end{equation}
+where the second term represents a correction for the change in direction
+of motion of the aircraft, which is difficult to avoid in the yaw
+maneuver. The measurements thus provide $\beta^{*}$, an estimate
+of the sideslip during the yaw maneuvers.
+
+There is, however, a circular component in (\ref{eq:beta-equation}) because it involves the wind components and those require $\beta$ for their measurement when sideslip changes. To reduce the feedback
+from this term, the horizontal wind components $u$ and $v$ were low-pass-filtered with periods ranging from 5--30 s and the filtered values were used in (\ref{eq:beta-equation}). The wind should remain steady during the maneuver, so this reduces any false effect of the maneuver on the measurement. This made negligible difference in the fits, and the coefficients obtained were close to those in use for sideslip, so after exploring this the unfiltered values of the wind were used for the following fit. 
+
+
+A relatively simple equation provided a very good fit to the measurements:
+
+\begin{equation}
+\beta=e_{0}+e_{1}\frac{\Delta p_{\beta}}{q}\label{eq:betaFunctionForm}
+\end{equation}
+where $\Delta p_{\beta}$ is the pressure difference between horizontally
+separated pressure ports on the radome and $q$ is the dynamic pressure: 
+$\Delta p_{\beta}=$BDIFR and $q=$QCXC. The result from the calibration is shown in Fig.\ 3 below. The square of the correlation was exceptionally high, 0.999, the residual standard error was 0.09$^{\circ}$, and the best-fit coefficients were \{$e_0$, $e_1$\} = \{$-$0.19, 12.31\}. For comparison, the standard values from the calibration of the previous radome were \{-0.012, 12.21\}, so the sideslip calibration is not significantly changed from the old calibration. However, the offset is not constrained well by the yaw maneuvers and should be determined by either circle or reverse-heading maneuvers, so this offset will be revised below on the basis of the available reverse-heading maneuver. 
+
+<<sideslip,fig.cap=capnF3,out.width="300pt",fig.align="center", echo=F>>=
+# sideslip calibration:
+
+detach(DataV)
+
+# first get filtered wind-component values:
+# u <- -1. * D$WSC * sin (D$WDC*Cradeg)
+# v <- -1. * D$WSC * cos (D$WDC*Cradeg)
+# u <- ButterworthFilter (u, tau=30)
+# v <- ButterworthFilter (v, tau=30)
+
+r <- setRange (Data$Time, 154510,154650)
+
+DataP <- Data[r,]
+Valid <- (DataP$TASX > 100.)
+DataV <- DataP[Valid,]
+attach(DataV)
+Hmean <- mean(THDG)
+u <- -1. * WSC * sin (WDC*Cradeg)
+v <- -1. * WSC * cos (WDC*Cradeg)
+#u <- ButterworthFilter(u, tau=20.)
+#v <- ButterworthFilter(v, tau=20.)
+# u[1:length(r1)] <- u1
+# u[(length(r1)+1):length(c(r1,r2))] <- u2
+# u[(length(c(r1,r2))+1):length(r)] <- u3
+# v[1:length(r1)] <- v1
+# v[(length(r1)+1):length(c(r1,r2))] <- v2
+# v[(length(c(r1,r2))+1):length(r)] <- v3
+# tauslip = 10.
+# u[1:length(r1)] <- ButterworthFilter(u[1:length(r1), tau=tauslip)
+# u[(length(r1)+1):length(c(r1,r2))] <- ButterworthFilter(u[(length(r1)+1):length(c(r1,r2))], tau=tauslip)
+# u[(length(c(r1,r2))+1):length(r)] <- ButterworthFilter(u[(length(c(r1,r2))+1):length(r)], tau=tauslip)
+# v[1:length(r1)] <- ButterworthFilter(v[1:length(r1), tau=tauslip)
+# v[(length(r1)+1):length(c(r1,r2))] <- ButterworthFilter(v[(length(r1)+1):length(c(r1,r2))], tau=tauslip)
+# v[(length(c(r1,r2))+1):length(r)] <- ButterworthFilter(v[(length(c(r1,r2))+1):length(r)], tau=tauslip)
+
+SSREF <- -THDG + atan2((VEW-u), (VNS-v))/ Cradeg
+SSREF[SSREF < -180.] <- SSREF[SSREF < -180.] + 360.
+#plot (SSREF, SSLIP, pch=16, cex=0.6,col='blue')
+BQR <- BDIFR / QCXC
+sfm <- lm(SSREF~BQR)
+cfs <- coefficients(sfm)
+#print(c("Fit coefficients are: ",cfs))
+print(summary(sfm))
+S2 <- cfs[1] + cfs[2] * BQR
+plot (SSREF, S2, pch=16, cex=0.6, col='blue',
+      xlab="SS Reference", ylab="SSLIP from fit")
+lines(c(-8.,8.), c(-8.,8.), col='orange', lty=2, lwd=3)
+title ("Radome")
+cap3panel <- "Wind components measured during the reverse-heading maneuver of FRAPPE flight RF04, 1558--1610. The red dashed lines indicate the straight legs before and after the turn to reverse course and show the mean values averaged over those segments. The top panel shows the longitudinal wind component, the middle panel the lateral wind component as originally processed, and the bottom panel the lateral wind with the new calibration but adjusted to eliminate the offset."
+
+@
+
+\section*{Checking Offsets with a Reverse Heading Maneuver}
+
+A reverse-heading maneuver was flown on FRAPPE flight RF04, with straight segments from 160000--160245
+and 160615--160815. For such a maneuver, if the wind remains constant,
+the expectation is that the longitudinal and lateral components of
+the wind relative to the aircraft each should reverse sign between the two legs. These components
+are, approximately, 
+
+\begin{equation}
+v_{x}=v_{g}\cos(\xi-\psi)-v_{t}\label{eq:longWind}
+\end{equation}
+\begin{equation}
+v_{y}=v_{g}\sin(\xi-\psi)-v_{t}\sin\beta\label{eq:latWind}
+\end{equation}
+where $v_{g}$ is the ground speed, $v_{t}$ the true airspeed, $\xi$
+the ground-track angle (GGTRK), $\psi$ the heading, and $\beta$ the sideslip
+angle. These two wind components are plotted in Fig.\ 4. The top panel shows that, for the longitudinal component, the sign of the measurement nearly reverses: The mean for the first leg is 2.15 and that for the second leg is -2.58, so the indicated error is about 0.2 m/s, which is satisfactory especially considering the variability in the measured component during each leg. This is evidence that the "PCOR" function, now based on the LAMS calibration, is providing an accurate measurement of airspeed. However, the lateral measurement, shown in the middle panel, indicates a problem, changing from 0.1 to 6.0 m/s and so indicating an error of 3 m/s. To correct for this offset, an offset in sideslip of about +1.25$^{\circ}$ is required. When this is introduced, the lateral measurements from the two legs agree as shown in the bottom panel of Fig.\ 4.
+<<RevHFig1, fig.cap=cap3panel,echo=FALSE>>=
+detach(DataV)
+r <- setRange(Data$Time, 155800, 161000)
+DataP <- Data[r,]
+attach(DataP)
+Vg <- sqrt(GGVEW**2+GGVNS**2)
+Vlg <- Vg*cos((GGTRK-THDG)*Cradeg)-TASX
+Vlt <- Vg*sin((GGTRK-THDG)*Cradeg)-TASX*sin(SSLIP*Cradeg)
+op <- par (mfrow=c(3,1), mar=c(4,4,0,2)+0.1)
+plotWAC(Time,Vlg,ylab="Longitudinal [m/s]")
+r1 <- setRange(Time, 160000,160245)
+r2 <- setRange(Time, 160615,160815)
+Vlg1 <- mean(Vlg[r1])
+Vlg2 <- mean(Vlg[r2])
+points(Time[r1], rep(Vlg1, length(r1)), type='l', lty=2,lwd=3,col='red')
+points(Time[r2], rep(Vlg2, length(r2)), type='l', lty=2,lwd=3,col='red')
+plotWAC(Time, Vlt, ylab="Lateral [m/s]")
+Vlt1 <- mean(Vlt[r1])
+Vlt2 <- mean(Vlt[r2])
+print (sprintf("Longitudinal wind averages: %f %f",Vlg1,Vlg2))
+points(Time[r1], rep(Vlt1, length(r1)), type='l', lty=2,lwd=3,col='red')
+points(Time[r2], rep(Vlt2, length(r2)), type='l', lty=2,lwd=3,col='red')
+print(sprintf("Lateral wind averages:      %f %f",Vlt1,Vlt2))
+
+
+#SSLIP <- SSLIP+1.25
+SSL <- 1.25+12.31*BDIFR/QCXC
+Vlt <- Vg*sin((GGTRK-THDG)*Cradeg)-TASX*sin(SSL*Cradeg)
+# op <- par (mfrow=c(2,1), mar=c(4,4,0,2)+0.1)
+# plotWAC(Time,Vlg,ylab="Longitudinal")
+# r1 <- setRange(Time, 160000,160245)
+# r2 <- setRange(Time, 160615,160815)
+# Vlg1 <- mean(Vlg[r1])
+# Vlg2 <- mean(Vlg[r2])
+# points(Time[r1], rep(Vlg1, length(r1)), type='l', lwd=3,col='red')
+# points(Time[r2], rep(Vlg2, length(r2)), type='l', lwd=3,col='red')
+plotWAC(Time, Vlt, ylab="Revised Lateral [m/s]")
+Vlt1 <- mean(Vlt[r1])
+Vlt2 <- mean(Vlt[r2])
+#print (c(Vlg1,Vlg2))
+points(Time[r1], rep(Vlt1, length(r1)), type='l', lty=2,lwd=3,col='red')
+points(Time[r2], rep(Vlt2, length(r2)), type='l', lty=2,lwd=3,col='red')
+print(sprintf("Lateral wind components with new calibration: %f %f",Vlt1,Vlt2))
+detach(DataP)
+
+@
+
+\vfill\eject
+
+\section*{Summary}
+
+Angle-of-attack: Equation (\ref{eq:AOAsens1term}), with coefficients listed there.
+
+Sideslip: Equation (\ref{eq:betaFunctionForm}) with coefficients $e_0$=1.25, $e_1$=12.31
+
+Note: The speed run has more variation in heading than is desirable, so it will be useful to repeat this analysis with additional speed runs and/or circle maneuvers. The difference in mean heading between these two legs is 172$^{\circ}$. For future reverse-heading maneuvers, this needs to be 180$^{\circ}$. It is best to orient these legs along or against the wind and then fly fixed headings, allowing the course to drift if necessary.
+
+
+\begin{center}
+\textsf{\textcolor{blue}{-- End of Memo --}}
+\par\end{center}
+
+\end{document}

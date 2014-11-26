@@ -1,0 +1,1 @@
+This repository contains programs to study characteristics of the wind measurements in the C-130 project FRAPPE. In particular, FRAPPEprocessing.Rnw contains the program used to determine the sensitivity coefficients and offsets for wind measurements, and it documents the pressure corrections to be used. The summary section (p. 20) lists the key results.
