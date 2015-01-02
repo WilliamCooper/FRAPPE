@@ -19,7 +19,7 @@
 \usepackage{calc}
 \usepackage{amsmath}
 \usepackage{graphicx}
-\usepackage[unicode=true,colorlinks=true]
+\usepackage[unicode=true,colorlinks=true,linkcolor=black,urlcolor=blue]
 {hyperref}
 \usepackage{breakurl}
 
@@ -233,9 +233,11 @@ VarList <- c("VYC","GGALT","LATC", "LONC", "PSXC", "QCXC",
              "ROLL", "THDG", "BDIFR", "EWX", "WIC", "GGSPD",
              "PSFRD", "QCFR", "PSFC", "QCFRC", "GGVEW_NVTL", "GGVNS_NVTL",
              "VSPD", "ATX", "PSFD", "QCF", "GGVSPD_NVTL", "GGVEW", "GGVNS")
+
 ## Data <- getNetCDF (fname, VarList, 154400, 161000)
 ## Data$GGVSPD <- Data$GGVSPD_NVTL
 ## save(Data, file=sprintf ("./%s%sR.Rdata", Project, Flight))
+
 load(file=sprintf ("./%s%sR.Rdata", Project, Flight))
 Data$GGVEW <- Data$GGVEW_NVTL
 Data$GGVNS <- Data$GGVNS_NVTL
@@ -572,9 +574,11 @@ Flight <- "rf09"
 fname = sprintf("%s%s/%s%sR.nc", Directory, Project, Project, Flight)
 #print(fname)
 #Data <- getNetCDF (fname, VarNames)
+
 ## Data <- getNetCDF (fname, VarList, 191800, 194000)
 ## Data$GGVSPD <- Data$GGVSPD_NVTL
 ## save(Data, file=sprintf ("./%s%sR.Rdata", Project, Flight))
+
 load(file=sprintf ("./%s%sR.Rdata", Project, Flight))
 ## load("/home/Data/FRAPPE/FRAPPErf09.Rdata")
 ## Data <- d
