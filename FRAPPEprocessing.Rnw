@@ -19,8 +19,8 @@
 \usepackage{calc}
 \usepackage{amsmath}
 \usepackage{graphicx}
-\usepackage[unicode=true]
- {hyperref}
+\usepackage[unicode=true,colorlinks=true]
+{hyperref}
 \usepackage{breakurl}
 
 \makeatletter
@@ -84,7 +84,7 @@
 
 This memo discusses some studies of the wind measurements for FRAPPE
 and the related corrections to pressure based on the earlier calibration
-via LAMS.
+via LAMS. This version of the memo, V3, pertains to using QCFR/PSFRD as the primary sensors for calculating TASF/TASX and hence for calculating wind. This change was made, from QCF/PSFD, because the latter did not produce wind measurements that were satisfactory in reverse-heading or circle maneuvers and also, in the case of QCF, was inconsistent with other projects in its relationship to QC\_A. QCFR/PSFRD appeared to be much better in both those regards. Note, however, that because of this change the sensitivity coefficients describing angle-of-attack and sideslip use QCFR in the denominator of the pressure ratio, so calibration coefficients are slightly different and should not be used for other projects where QCF/PSFD are primary.
 
 
 \section{Calibration of the angle-of-attack}
@@ -96,8 +96,8 @@ The equation used for the fit is
 \begin{equation}
 \alpha_{ref}=\theta-\frac{w_{p}}{V}=b_{0}+b_{1}\frac{\Delta p_{\alpha}}{q}\label{eq:AOAfitEq}
 \end{equation}
-where $\theta=$PITCH, $w_{p}=$GGVSPDB, $V=$TASX, $\Delta p_{\alpha}=$ADIFR,
-and $q=$QCF. The choice for representing $q$ is based on QCF being
+where $\theta=$PITCH, $w_{p}=$GGVSPD, $V=$TASX, $\Delta p_{\alpha}=$ADIFR,
+and $q=$QCFR. The choice for representing $q$ is based on QCFR being
 more reliable than QCR and not requiring prior pressure-defect correction
 as does PSXC (the use of which introduces circularity in the calculation
 because the pressure correction itself depends on angle of attack.
@@ -105,52 +105,201 @@ The left side of (\ref{eq:AOAfitEq}) is equal to the angle of attack
 if the vertical wind is zero, so the use of this result depends on
 the calibration maneuver being flown in air without vertical motion. 
 
+The details of the fit results are listed below:
+
+% <<wind-processor-function>>=
+% #' @title WindProcessor
+% #' @description Calculates new wind variables
+% #' @details Constructs a memo with the math basis for the transformations required to calculate wind. Takes a data.frame as input and adds to that new wind variables as listed in the description above. The data.frame must contain variables TASX, ATTACK, SSLIP, GGVEW, GGVNS, VEW, VNS, THDG, ROLL, and PITCH.
+% #' @author Al Cooper
+% #' @export WindProcessor
+% #' @import Ranadu,signal,knitr
+% #' @param Data A data.frame containing these variables: TASX, ATTACK, SSLIP, GGVEW, GGVNS, GGVSPD, VEW, VNS, THDG, ROLL, and PITCH.
+% #' @return The original data.frame is returned with variables WDN, WSN, WIN added to represent the calculated wind direction and speed and the vertical wind.
+% WindProcessor <- function (data=Data) {
+%   Cradeg <- pi/180
+%   attach (data)
+%   d <- data.frame ("U" = TASX)
+%   d$V <- TASX * tan (SSLIP * Cradeg)
+%   d$W <- TASX * tan (ATTACK * Cradeg)
+%   rw <- as.matrix(d)
+%   cosphi <- cos (ROLL * Cradeg)
+%   sinphi <- sin (ROLL * Cradeg)
+%   costheta <- cos (PITCH * Cradeg)
+%   sintheta <- sin (PITCH * Cradeg)
+%   cospsi <- cos (THDG * Cradeg)
+%   sinpsi <- sin (THDG * Cradeg)
+%   DL <- length(TASX)
+%   One <- rep (1, DL)
+%   Z <- rep (0, DL)
+%   T1 <- aperm(array (c(One,Z,Z,Z,cosphi,-sinphi,Z,sinphi,cosphi), 
+%                    dim=c(DL,3,3)))
+%   T2 <- aperm(array (c (costheta,Z,sintheta,Z,One,Z,-sintheta,Z,costheta), 
+%                    dim=c(DL,3,3)))
+%   T3 <- aperm(array (c (cospsi,-sinpsi,Z,sinpsi,cospsi,Z,Z,Z,One), 
+%                    dim=c(DL,3,3)))
+%   WDN <- vector ("numeric", DL)
+%   WSN <- vector ("numeric", DL)
+%   WIN <- vector ("numeric", DL)
+%   VNS <- zoo::na.approx (as.vector(VNS), maxgap=1000, na.rm = FALSE)
+%   VEW <- zoo::na.approx (as.vector(VEW), maxgap=1000, na.rm = FALSE)
+%   GGVNS <- zoo::na.approx (as.vector(GGVNS), maxgap=1000, na.rm = FALSE)
+%   GGVEW <- zoo::na.approx (as.vector(GGVEW), maxgap=1000, na.rm = FALSE)
+%   VNS[is.na(VNS)] <- 0
+%   VEW[is.na(VEW)] <- 0
+%   GGVNS[is.na(GGVNS)] <- 0
+%   GGVEW[is.na(GGVEW)] <- 0
+% 
+%   CVEW <- ComplementaryFilter (VEW, GGVEW, 150)
+%   CVNS <- ComplementaryFilter (VNS, GGVNS, 150)
+%   Hlast <- 0.
+% # note: tried e.g. tensor (aperm(T1), rw, 2, 2) -- fails
+% #       because of size of vector that it tries to allocate
+% # This works, though:
+% # Y1t <- mapply(FUN="%*%", lapply(X=apply(aperm(T1), 3, as.data.frame), FUN=as.matrix, nrow=3, ncol=3), as.data.frame(aperm(rw)))
+% # etc.
+% # There may be a better way, though
+% # apply(T1, 3, as.data.frame) produces a list, DL long, of
+% # 3x3 dataframes. lapply() converts that dataframe to a matrix
+% # and then mapply multiplies rw by the matrix.
+% # However, the loop below is fast (typically <1 s) and the
+% # following attempt to vectorize takes more than 10 times
+% # as long, so this is left commented for reference.
+% # system.time(
+% # {Y1 <- mapply(FUN="%*%", lapply(X=apply(T1, 3, as.data.frame), FUN=as.matrix, nrow=3, ncol=3), as.data.frame(aperm(rw)))
+% # Y2 <- mapply(FUN="%*%", lapply(X=apply(T2, 3, as.data.frame), FUN=as.matrix, nrow=3, ncol=3), as.data.frame(Y1))
+% # Y3 <- mapply(FUN="%*%", lapply(X=apply(T3, 3, as.data.frame), FUN=as.matrix, nrow=3, ncol=3), as.data.frame(Y2))
+% # WG <- aperm(matrix (c(-CVNS_GP, -CVEW_GP, CVSPD_GP), DL, 3))
+% # Y4 <- Y3 + WG
+% # WDG <- atan2 (Y4[2,], Y4[1,]) / Cradeg
+% # WSG <- sqrt (Y4[1,]**2 + Y4[2,]**2)
+% # WIG <- Y4[3,]
+% # WDG[!is.na(WDG) & (WDG < 0.)] <- WDG[!is.na(WDG) & (WDG < 0.)] + 360.
+% # }) 
+% # here is the loop equivalent:
+%   for (i in 1:DL) {
+%     Y1 <- T1[,,i] %*% matrix (rw[i,], 3, 1)
+%     Y2 <- T2[,,i] %*% Y1
+%     Y3 <- T3[,,i] %*% Y2
+%     WG <- matrix (c(-CVNS[i], -CVEW[i], GGVSPD[i]), 
+%                 3, 1)
+%     Y4 <- Y3 + WG
+%     WDN[i] <- atan2 (Y4[2], Y4[1]) / Cradeg
+%     if ((!is.na(WDN[i])) & (WDN[i] < 0.)) {
+%       WDN[i] <- WDN[i] + 360.
+%     }
+%     WSN[i] <- sqrt (Y4[1]**2 + Y4[2]**2)
+%     WIN[i] <- Y4[3]
+%   }
+%   detach (data)
+%   data$WDN <- WDN
+%   data$WSN <- WSN
+%   data$WIN <- WIN
+%   return (data)
+% }
+% 
+% @
+
+
+
+
+
 <<initialization,echo=FALSE,include=FALSE>>=
-opts_chunk$set(echo=FALSE, include=FALSE, fig.lp="fig:", fig.show="asis")
+
+require(knitr)
+opts_chunk$set(echo=FALSE, include=FALSE, fig.lp="fig:", fig.show="keep")
 opts_chunk$set(fig.width=6, fig.height=5, fig.align="center", digits=3)
 thisFileName <- "FRAPPEprocessing"
 require(Ranadu, quietly = TRUE, warn.conflicts=FALSE)
 require(ggplot2)
 require(grid)
-library(knitr)
 require(ggthemes)
 require(vioplot)
 require(plyr)
+require(signal)
 Flight <- "rf04"        
 Project = "FRAPPE"
 Directory <- DataDirectory()
-fname = sprintf("%s%s/%s%s.nc", Directory, Project, Project, Flight)
+fname = sprintf("%s%s/%s%sR.nc", Directory, Project, Project, Flight)
 print(fname)
 VarNames <- c("VYC","GGALT","LATC", "LONC", "PSXC", "QCXC",
               "WDC", "WSC", "GGVEW", "GGVNS", "VEW", "VNS", "TASX",
-              "ADIFR", "AKRD", "SSLIP", "PITCH", "GGTRK",
-              "ROLL", "THDG", "BDIFR", "EWX", "WIC", "GGSPDB",
-              "VSPD", "ATX", "PSFD", "QCF", "GGVSPDB", "GGVEWB", "GGVNSB")
-Data <- getNetCDF (fname, VarNames)
+              "ADIFR", "AKRD", "SSLIP", "PITCH", "GGTRK", "PSXC",
+              "ROLL", "THDG", "BDIFR", "EWX", "WIC", "GGSPD",
+              "VSPD", "ATX", "PSFD", "QCF", "GGVSPD", "GGVEW", "GGVNS")
+VarList <- c("VYC","GGALT","LATC", "LONC", "PSXC", "QCXC",
+             "WDC", "WSC", "GGVEW", "GGVNS", "VEW", "VNS", "TASX",
+             "ADIFR", "ATTACK", "SSLIP", "PITCH", "GGTRK",
+             "ROLL", "THDG", "BDIFR", "EWX", "WIC", "GGSPD",
+             "PSFRD", "QCFR", "PSFC", "QCFRC", "GGVEW_NVTL", "GGVNS_NVTL",
+             "VSPD", "ATX", "PSFD", "QCF", "GGVSPD_NVTL", "GGVEW", "GGVNS")
+## Data <- getNetCDF (fname, VarList, 154400, 161000)
+## Data$GGVSPD <- Data$GGVSPD_NVTL
+## save(Data, file=sprintf ("./%s%sR.Rdata", Project, Flight))
+load(file=sprintf ("./%s%sR.Rdata", Project, Flight))
+Data$GGVEW <- Data$GGVEW_NVTL
+Data$GGVNS <- Data$GGVNS_NVTL
+ReCalWind <- function (Data) {
+  Data$PITCHC <- Data$PITCH - CorrectPitch(Data)
+  ## replace TAS with TAS based on PSFRD/QCFR
+  Data$PSFC <- Data$PSFRD + Data$PSFRD * PCorFunction (Data$PSFRD, Data$QCFR,     Data$ATTACK, AC="C130", Sensors="R")
+  Data$PSFDC <- Data$PSFD + Data$PSFD * PCorFunction (Data$PSFD, Data$QCF, Data$ATTACK, AC="C130")
+  Data$QCFRC <- Data$QCFR - Data$PSFRD * PCorFunction (Data$PSFRD, Data$QCFR, Data$ATTACK, AC="C130", Sensors="R")
+  Data$QCFC <- Data$QCF - Data$PSFD * PCorFunction (Data$PSFD, Data$QCF, Data$ATTACK, AC="C130")
+  Data$TASX <- TrueAirspeed (MachNumber (Data$PSFC, Data$QCFRC), Data$ATX)
+#   for (i in 2:length(Data$GGVEW)) {  ##### TEMPORARY TEST #####
+#     Data$GGVEW[i-1] <- 0.5 * (Data$GGVEW[i-1] + Data$GGVEW[i])
+#     Data$GGVNS[i-1] <- 0.5 * (Data$GGVNS[i-1] + Data$GGVNS[i])
+#   }
+  ## Data$THDG <- Data$THDG -0.24   ######## TEST ##########
+  ## Data$TASX <- TrueAirspeed (MachNumber (Data$PSFDC, Data$QCFC), Data$ATX)
+  ## Data$TASX <- Data$TASX - 0.35  # test, subtract offset found from R-circle
+  Data <- WindProcessor (Data)
+  Data$WDC <- Data$WDN
+  Data$WSC <- Data$WSN
+  Data$WIC <- Data$WIN
+  return (Data)
+}
+## don't call this now exc as check: QCFR/PSFRD/TASX etc should be correct
+# Data <- ReCalWind (Data)
+# for (i in 2:length(Data$GGVEW)) {  ##### TEMPORARY TEST #####
+#   Data$GGVEW[i-1] <- 0.5 * (Data$GGVEW[i-1] + Data$GGVEW[i])
+#   Data$GGVNS[i-1] <- 0.5 * (Data$GGVNS[i-1] + Data$GGVNS[i])
+# }
 r <- setRange (Data$Time, 155000, 155500) # speed run
 DataP <- Data[r,]
 Valid <- (DataP$TASX > 100.)
 DataV <- DataP[Valid,]
+
 #attach(DataV)
 Cradeg <- pi / 180.
-Mach <- MachNumber (DataV$PSFD, DataV$QCF)  # uses uncorrected q, p
-AOAREF <- DataV$PITCH - asin(DataV$GGVSPDB/DataV$TASX) / Cradeg
-AQR <- DataV$ADIFR/DataV$QCF # basic pressure ratio for AOA
-<<AOA-fit-with-summary-and-plot, fig.lp="fig:", fig.cap="Fit AOA vs reference AOA ($\\alpha_{ref}$) from Eq.\ 1. The orange dashed line shows the fit for which details and coefficients are shown in the text.", echo=FALSE, include=TRUE, size="footnotesize">>==
+Mach <- MachNumber (DataV$PSFRD, DataV$QCFR)  # uses uncorrected q, p
+AOAREF <- DataV$PITCH - asin(DataV$GGVSPD/DataV$TASX) / Cradeg
+AQR <- DataV$ADIFR/DataV$QCFR # basic pressure ratio for AOA
+<<AOA-fit-with-summary-and-plot, fig.show='keep', fig.lp="fig:", fig.cap="\\textsl{Fit AOA vs reference AOA ($\\alpha_{ref}$) from Eq.\ 1. The orange dashed line shows the fit, for which details and coefficients are shown in the text.}", echo=FALSE, include=TRUE, size="footnotesize", digits=4>>==
+#require(Hmisc, quietly = TRUE, warn.conflicts=FALSE)
 DataV["AOAREF"] <- AOAREF
 DataV["AQR"]    <- AQR
 fmy <- lm(AOAREF~AQR, data=DataV)
-print (summary(fmy))
+SummarizeFit <- function(ft) {
+  print (summary(ft)$call)
+  print ("Coefficients:")
+  print (summary(ft)$coefficients)
+  print (sprintf ("Residual standard error: %.3f, dof=%d", summary(ft)$sigma, summary(ft)$df[2]))
+  print (sprintf ("R-squared %.3f", summary(ft)$r.squared))
+}
+SummarizeFit(fmy)
 cfr <- coefficients (fmy)
 A1 <- cfr[1]+cfr[2]*AQR
+DataV$A1 <- A1
 #plot (AOAREF, A1, pch=16, cex=0.8, col='blue', xlab="Ref. AOA", ylab="fit AOA")
 #lines (c(-3.,6.), c(-3.,6.), lty=2, lwd=3, col='darkorange')
-g <- ggplot(data=DataV, aes(x=AOAREF, y=AQR))
+g <- ggplot(data=DataV, aes(x=AOAREF, y=A1))
 g <- g + geom_point (pch=20, col='blue')
 g <- g + geom_smooth (method='lm', col='darkorange', lty=2, lwd=1.5)
 g <- g + xlab("Reference AOA [deg.]") + ylab ("AOA from fit [deg.]") + theme_WAC()
 print(g)
-capnF3 <- "The sideslip attack determined from the fit, as a function of the reference angle provided by Equation (\ref{eq:betaFunctionForm}), for the data from FRAPPE flight RF04, 154510--154650."
+capnF3 <- "\\textsl{The sideslip attack determined from the fit, as a function of the reference angle provided by Equation (\\ref{eq:betaFunctionForm}), for the data from FRAPPE flight RF04, 154510--154650.}"
 
 @
 
@@ -224,8 +373,8 @@ Calibration of the sideslip angle is more difficult, both because
 the equations are more complicated and because the maneuver is very
 hard to fly. Ideally, the sideslip maneuver should only change yaw
 angle and heading without change in roll, altitude, or angle-of-attack,
-but that is impossible. It is practical, however, to minimize roll
-and change in altitude, and that was how these maneuvers were flown.
+but that is impossible. These maneuvers were flown with primary attention to roll
+and altitude.
 
 For yaw maneuvers,
 the calibration is based on the expectation that the horizontal wind
@@ -233,16 +382,16 @@ remains constant. The first-order equations for the east and north
 components of the wind, $u$ and $v$, are:
 
 \begin{eqnarray}
-u & = & -U_{a}\sin(\Psi+\beta)+u_{p}\nonumber \\
-v & = & -U_{a}\cos(\Psi+\beta)+v_{p}\label{eq:horizWindeqs}
+u & = & -U_{a}\sin(\psi+\beta)+u_{p}\nonumber \\
+v & = & -U_{a}\cos(\psi+\beta)+v_{p}\label{eq:horizWindeqs}
 \end{eqnarray}
-where $U_{a}$ is the true airspeed, $\Psi$ the heading, $\beta$
+where $U_{a}$ is the true airspeed, $\psi$ the heading, $\beta$
 the sideslip angle, and $u_{p}$ and $v_{p}$ are the eastward and
 northward ground-speed components of the aircraft. These two equations
 lead to the following reference formula for $\beta$:
 
 \begin{equation}
-\beta^{*}=-\Psi+\arctan\left(\frac{u_{p}-u}{v_{p}-v}\right)\label{eq:beta-equation}
+\beta^{*}=-\psi+\arctan\left(\frac{u_{p}-u}{v_{p}-v}\right)\label{eq:beta-equation}
 \end{equation}
 where the second term represents a correction for the change in direction
 of motion of the aircraft, which is difficult to avoid in the yaw
@@ -260,7 +409,7 @@ A relatively simple equation provided a very good fit to the measurements:
 \end{equation}
 where $\Delta p_{\beta}$ is the pressure difference between horizontally
 separated pressure ports on the radome and $q$ is the dynamic pressure: 
-$\Delta p_{\beta}=$BDIFR and $q=$QCF. 
+$\Delta p_{\beta}=$BDIFR and $q=$QCFR. 
 
 A good set of yaw maneuvers was flown on FRAPPE flight 4, 15:45:10
 to 15:46:50, so measurements from that flight period will be used
@@ -306,13 +455,14 @@ v <- -1. * DataV$WSC * cos (DataV$WDC*Cradeg)
 SSREF <- -DataV$THDG + atan2((DataV$VEW-u), (DataV$VNS-v))/ Cradeg
 SSREF[SSREF < -180.] <- SSREF[SSREF < -180.] + 360.
 #plot (SSREF, SSLIP, pch=16, cex=0.6,col='blue')
-BQR <- DataV$BDIFR / DataV$QCF
+BQR <- DataV$BDIFR / DataV$QCFR
 DataV["SSREF"] <- SSREF
 DataV["BQR"] <- BQR
 sfm <- lm(SSREF~BQR, data=DataV)
 cfs <- coefficients(sfm)
 #print(c("Fit coefficients are: ",cfs))
-print(summary(sfm))
+#print(summary(sfm))
+SummarizeFit(sfm)
 S2 <- cfs[1] + cfs[2] * BQR
 #plot (SSREF, S2, pch=16, cex=0.6, col='blue',
 #      xlab="SS Reference", ylab="SSLIP from fit")
@@ -326,17 +476,16 @@ print (g)
 
 @
 
-The result from the calibration is also shown in Fig.\ 2, as the dashed orange line. The square of the correlation was exceptionally high, 0.999, the residual standard error was 0.10$^{\circ}$, and the best-fit coefficients were \{$e_0$, $e_1$\} = \{$-$0.165, 12.852\}. For comparison, the standard values from the calibration of the previous radome were \{-0.012, 12.21\}, so the sideslip calibration is changed less than that for angle-of-attack but is still significantly different from the old calibration. However, the offset (or first term in the fitted equation) is dependent on the heading being accurate, and the heading has errors that are different for each flight and during flights. It is therefore useful to check the first coefficient in other ways, either by circle or reverse-heading maneuvers. The first coefficient representing the offset will therefore be revised below on the basis of additional information from such maneuvers.
-
+The result from the calibration is also shown in Fig.\ 2, as the dashed orange line. The square of the correlation was exceptionally high, \Sexpr{round(summary(sfm)$r.squared,4)}, the residual standard error was \Sexpr{round(summary(sfm)$sigma, 2)}$^{\circ}$, and the best-fit coefficients were \{$e_0$, $e_1$\} = \{\Sexpr{round(cfs[1], 4)}, \Sexpr{round(cfs[2], 4)}\}. For comparison, the standard values from the calibration of the previous radome were \{-0.012, 12.21\}, so the sideslip calibration is significantly different, especially in regard to the constant or offset term, from the old calibration. However, the offset (or first term in the fitted equation) is dependent on the heading being accurate, and the heading has errors that are different for each flight and during flights. It is therefore useful to check the first coefficient in other ways, either by circle or reverse-heading maneuvers, so this coefficient will be adjusted based on the additional study of such maneuvers that follows. 
 
 
 
 <<caption2, echo=FALSE, include=FALSE>>=
-cap3panel <- "Wind components measured during the reverse-heading maneuver of FRAPPE flight RF04, 1558--1610. The red dashed lines indicate the straight legs before and after the turn to reverse course and show the mean values averaged over those segments. The top panel shows the longitudinal wind component, the middle panel the lateral wind component as originally processed, and the bottom panel the lateral wind with the new calibration but adjusted to eliminate the offset."
+cap3panel <- "\\textsl{Wind components measured during the reverse-heading maneuver of FRAPPE flight RF04, 1558--1610. The red dashed lines indicate the straight legs before and after the turn to reverse course and show the mean values averaged over those segments. The top panel shows the longitudinal wind component, the middle panel the lateral wind component as originally processed, and the bottom panel the lateral wind with the new calibration but adjusted to eliminate the offset.}"
 @
 
 
-\subsection{Sideslip offset}
+\subsection{Sideslip and heading offsets}
 
 
 \subsubsection{Reverse-heading maneuvers}
@@ -355,26 +504,30 @@ v_{y}=v_{g}\sin(\xi-\psi)-v_{t}\sin\beta\label{eq:latWind}
 \end{equation}
 where $v_{g}$ is the ground speed, $v_{t}$ the true airspeed, $\xi$
 the ground-track angle, $\psi$ the heading, and $\beta$ the sideslip
-angle. These components are plotted in Fig.\ \ref{fig:actual-plot-1}. The top panel shows that, for the longitudinal component, the reverse-course measurements are almost the negative of each other: The mean for the first leg is 2.15 and that for the second leg is -2.58, so the indicated error is about 0.2 m/s, which is satisfactory especially considering the variability in the measured component during each leg. However, the lateral measurements, shown in the middle panel, indicate a problem, changing from 0.1 to 6.0 m/s and so indicating an error of 3 m/s. To correct for this offset, an offset in sideslip of about +1.45$^{\circ}$ is required. When this is introduced, the lateral measurements from the two legs become -2.99 and +3.01 and so reverse as expected, as shown in the bottom panel of Fig.\ \ref{fig:actual-plot-1}.
-
+angle. 
 <<RevHFig1, include=TRUE>>=
 
 r <- setRange(Data$Time, 155800, 161000)
 DataP <- Data[r,]
+## DataP$TASX <- DataP$TASX
+DataP$SS <- cfs[1]+cfs[2] *  DataP$BDIFR / DataP$QCF
 #attach(DataP)
 Vg <- sqrt(DataP$GGVEW**2+DataP$GGVNS**2)
 Vlg <- Vg*cos((DataP$GGTRK-DataP$THDG)*Cradeg)-DataP$TASX
-Vlt <- Vg*sin((DataP$GGTRK-DataP$THDG)*Cradeg)-DataP$TASX*sin(DataP$SSLIP*Cradeg)
+Vlt <- Vg*sin((DataP$GGTRK-DataP$THDG)*Cradeg)-DataP$TASX*sin(DataP$SS*Cradeg)
 r1 <- setRange(DataP$Time, 160000,160245)
 r2 <- setRange(DataP$Time, 160615,160815)
+TASmean <- mean (DataP$TASX[c(r1, r2)], na.rm=TRUE)
 Vlg1 <- mean(Vlg[r1])
 Vlg2 <- mean(Vlg[r2])
 Vlt1 <- mean(Vlt[r1])
 Vlt2 <- mean(Vlt[r2])
-print (sprintf("Longitudinal wind averages: %f %f",Vlg1,Vlg2))
-print(sprintf("Lateral wind averages:      %f %f",Vlt1,Vlt2))
+#print (sprintf("Longitudinal wind averages: %f %f",Vlg1,Vlg2))
+#print(sprintf("Lateral wind averages:      %f %f",Vlt1,Vlt2))
+#print(TASmean)
 #SSLIP <- SSLIP+1.25
-SSL <- 1.45+cfs[1]+cfs[2]*DataP$BDIFR/DataP$QCF
+## 1.40 that follows was determined by best match for lateral components
+SSL <- 1.40+cfs[2]*DataP$BDIFR/DataP$QCFR # rec developed earlier
 Vltr <- Vg*sin((DataP$GGTRK-DataP$THDG)*Cradeg)-DataP$TASX*sin(SSL*Cradeg)
 # op <- par (mfrow=c(2,1), mar=c(4,4,0,2)+0.1)
 # plotWAC(DataP$Time,Vlg,ylab="Longitudinal")
@@ -387,10 +540,14 @@ Vltr <- Vg*sin((DataP$GGTRK-DataP$THDG)*Cradeg)-DataP$TASX*sin(SSL*Cradeg)
 Vlt1r <- mean(Vltr[r1])
 Vlt2r <- mean(Vltr[r2])
 #print (c(Vlg1,Vlg2))
-print(sprintf("Lateral wind components with new calibration: %f %f",Vlt1,Vlt2))
+#print(sprintf("Lateral wind components with new calibration: %f %f",Vlt1r,Vlt2r))
 #detach(DataP)
 
 @
+
+These components are plotted in Fig.\ \ref{fig:actual-plot-1}, with the primary measurements considered to be PSFRD and QCFR for the calculation of true airspeed and wind as well as for the determination of sensitivity coefficients. The top panel shows that, for the longitudinal component, the reverse-course measurements change from \Sexpr{round(Vlg1, 2)} to \Sexpr{format(round(Vlg2, 2), nsmall=2)}, so the indicated error is about \Sexpr{round(-(Vlg1+Vlg2)/2, 1)} m/s. This is reasonable in comparison to the estimated 0.3 m/s uncertainty in true airspeed, as found from the original LAMS-based PCOR study and as verified in that study by a series of reverse-heading maneuvers.  The lateral measurements, shown in the middle panel, also were satisfactory: The values for the two legs were \Sexpr{round(Vlt1,2)} and \Sexpr{round(Vlt2,2)} indicating a lateral error of about \Sexpr{round((Vlt1+Vlt2)/2,1)}\,m/s. This calculation used the sensitivity coefficients as determined above (with first coefficient for the sideslip calibration 1.3793), but the agreement between the two legs is even better, indicating an error of <0.1\,m/s, if the offset is changed to 1.40$^{\circ}$. The latter result is shown in the bottom panel of  Fig.\ \ref{fig:actual-plot-1}.
+
+When the longitudinal wind was calculated instead from QCF and PSFD, the disagreement in this reverse-heading maneuver was significantly larger, about 2.4 m/s, indicating an error in true airspeed of about 1.2 m/s. A reason for this disagreement has not been found, but comparison of QCF to QC\_A shows that this has changed from earlier projects although the similar relationship of QCFR to QC\_A has stayed consistent. This suggests a problem with the calibration of QCF, but examination of the calibration records does not indicate any problem. Nevertheless, it appears preferable to use QCFR and PSFRD as primary sensors for FRAPPE. 
 
 <<actual-plot-1, fig.cap=cap3panel, include=TRUE, fig.height=4.8, fig.width=6.5, fig.lp="fig:">>=
 op <- par (mfrow=c(3,1), mar=c(4,4,0,2)+0.1)
@@ -404,40 +561,67 @@ Z <- plotWAC(DataP$Time, Vltr, ylab="Revised Lateral [m/s]")
 points(DataP$Time[r1], rep(Vlt1r, length(r1)), type='l', lty=2,lwd=3,col='red')
 points(DataP$Time[r2], rep(Vlt2r, length(r2)), type='l', lty=2,lwd=3,col='red')
 
+cap5panel <- "\\textsl{Wind components measured during the reverse-heading maneuver of FRAPPE flight 9, 193100--193910. The red dashed lines indicate the straight legs before and after the turn to reverse course and show the mean values averaged over those segments. The top panel shows the longitudinal wind component, the middle panel the lateral wind component as originally processed, and the bottom panel the lateral wind with the new calibration but adjusted to eliminate the offset.}"
+
 @
 
-The conditions were not ideal during this maneuver, however, with
-important variability along each of the legs as shown in Fig.~3 and
-with some mis-alignment of the two legs, so it is worthwhile to consider
-other maneuvers. Another reverse-heading maneuver was flown on flight
-9, with reverse legs 19:31:00--19:34:00 and 19:36:10--19:39:10. An
-analysis like that used for the first reverse-heading maneuver indicated
-a slightly higher offset in sideslip,\label{SS-offset} 1.6$^{\circ}$
-vs 1.45$^{\circ}$ for the previous maneuver, but as shown in Fig.~\ref{fig:RevHFig2}
-the conditions were steadier for this case and the maneuver was flown
-very well so this seems to be a better value to use. A source of variability
-in the sideslip offset determined in this way is error in heading,
-because it is not possible to separate an offset in sideslip from
-an offset in heading using reverse-heading maneuvers. Because the
-heading standard uncertainty is 0.05$^{\circ}$, uncertainty at this
-level also characterizes the offset in sideslip.
-
-<<caption5>>=
-cap5panel <- "Wind components measured during the reverse-heading maneuver of FRAPPE flight 9, 193100--193910. The red dashed lines indicate the straight legs before and after the turn to reverse course and show the mean values averaged over those segments. The top panel shows the longitudinal wind component, the middle panel the lateral wind component as originally processed, and the bottom panel the lateral wind with the new calibration but adjusted to eliminate the offset."
-@
 
 <<RevHFig2, fig.cap=cap5panel, fig.lp="fig:", fig.height=4.8, fig.width=6.5, include=TRUE>>=
 
 Flight <- "rf09"
-fname = sprintf("%s%s/%s%s.nc", Directory, Project, Project, Flight)
+fname = sprintf("%s%s/%s%sR.nc", Directory, Project, Project, Flight)
 #print(fname)
-Data <- getNetCDF (fname, VarNames)
+#Data <- getNetCDF (fname, VarNames)
+## Data <- getNetCDF (fname, VarList, 191800, 194000)
+## Data$GGVSPD <- Data$GGVSPD_NVTL
+## save(Data, file=sprintf ("./%s%sR.Rdata", Project, Flight))
+load(file=sprintf ("./%s%sR.Rdata", Project, Flight))
+## load("/home/Data/FRAPPE/FRAPPErf09.Rdata")
+## Data <- d
+
+Data$GGVEW <- Data$GGVEW_NVTL
+Data$GGVNS <- Data$GGVNS_NVTL
+## Data <- ReCalWind (Data)
+for (i in 2:length(Data$GGVEW)) {  ##### TEMPORARY TEST #####
+  Data$GGVEW[i-1] <- 0.56 * Data$GGVEW[i-1] + 0.44 * Data$GGVEW[i]
+  Data$GGVNS[i-1] <- 0.56 * Data$GGVNS[i-1] + 0.44 * Data$GGVNS[i]
+}
+# ## replace TAS with TAS based on PSFRD/QCFR
+# Data$PSFC <- Data$PSFRD + Data$PSFRD * PCorFunction (Data$PSFRD, Data$QCFR, Data$ATTACK, AC="C130", Sensors="R")
+# Data$QCFRC <- Data$QCFR - Data$PSFRD * PCorFunction (Data$PSFRD, Data$QCFR, Data$ATTACK, AC="C130", Sensors="R")
+# Data$TASX <- TrueAirspeed (MachNumber (Data$PSFC, Data$QCFRC), Data$ATX)
+# Data$PITCHC <- Data$PITCH - CorrectPitch(Data)
+# Data <- WindProcessor (Data)
+# Data$WDC <- Data$WDN
+# Data$WSC <- Data$WSN
+# Data$WIC <- Data$WIN
+## correct for QCF cal coefficient:
+# calqcf <- c(1.18249, 17.2991, -0.00421515)
+# calold <- c(0.264, 17.227, 0.001)
+# Volts <- (sqrt(calqcf[2]^2-4*calqcf[3]*(calqcf[1]-Data$QCF))-calqcf[2])/(2*calqcf[3])
+# Data$QCFsave <- Data$QCF
+# Data$QCXCsave <- Data$QCXC
+# Data$QCF <- calold[3]*Volts^2 + calold[2]*Volts + calold[1]
+# ## revise TAS on basis of new QCF
+# Data$QCXC <- Data$QCF - PCorFunction (Data$PSF, Data$QCF, Data$AKRD, AC="C130")
+# Data$PSXC <- Data$PSF + PCorFunction (Data$PSF, Data$QCF, Data$AKRD, AC="C130")
+# Data$TASsave <- Data$TASX
+# Data$TASX <- TrueAirspeed (MachNumber (Data$PSXC, Data$QCXC), Data$ATX)-2
+# Data$GGVSPD <- Data$GGVSPD_NVTL
+# Data$ATTACK <- Data$AKRD
+# Dnew <- WindProcessor (Data)
+# ## replace values in normal data.frame and process as before
+# Data$WSC <- Dnew$WSN
+# Data$WDC <- Dnew$WDN
+# Data$WIC <- Dnew$WIN
+# Data$TASX <- Data$TASX - 1  # test fudge
 r <- setRange(Data$Time, 193100, 193910)
 DataP <- Data[r,]
 attach(DataP)
+SS <- cfs[1] + cfs[2] * BDIFR / QCFR
 Vg <- sqrt(GGVEW**2+GGVNS**2)
 Vlg <- Vg*cos((GGTRK-THDG)*Cradeg)-TASX
-Vlt <- Vg*sin((GGTRK-THDG)*Cradeg)-TASX*sin(SSLIP*Cradeg)
+Vlt <- Vg*sin((GGTRK-THDG)*Cradeg)-TASX*sin(SS*Cradeg)
 op <- par (mfrow=c(3,1), mar=c(4,4,0,2)+0.1)
 plotWAC(Time,Vlg,ylab="Longitudinal [m/s]")
 r1 <- setRange(Time, 193100,193400)
@@ -449,12 +633,12 @@ points(Time[r2], rep(Vlg2, length(r2)), type='l', lty=2,lwd=3,col='red')
 plotWAC(Time, Vlt, ylab="Lateral [m/s]")
 Vlt1 <- mean(Vlt[r1])
 Vlt2 <- mean(Vlt[r2])
-print (sprintf("Longitudinal wind averages: %f %f",Vlg1,Vlg2))
-print (sprintf("Lateral wind averages:      %f %f",Vlt1,Vlt2))
-points (Time[r1], rep(Vlt1, length(r1)), type='l', lty=2, lwd=3, col='red')
-points (Time[r2], rep(Vlt2, length(r2)), type='l', lty=2, lwd=3, col='red')
+
+Z <- points (Time[r1], rep(Vlt1, length(r1)), type='l', lty=2, lwd=3, col='red')
+Z <- points (Time[r2], rep(Vlt2, length(r2)), type='l', lty=2, lwd=3, col='red')
 #SSLIP <- SSLIP+1.25
-SSL <- 1.60+cfs[1]+cfs[2]*BDIFR/QCF
+#SSL <- cfs[1]+cfs[2]*BDIFR/QCF
+SSL <- 1.50+cfs[2]*BDIFR/QCFR
 Vlt <- Vg*sin((GGTRK-THDG)*Cradeg)-TASX*sin(SSL*Cradeg)
 # op <- par (mfrow=c(2,1), mar=c(4,4,0,2)+0.1)
 # plotWAC(Time,Vlg,ylab="Longitudinal")
@@ -464,22 +648,39 @@ Vlt <- Vg*sin((GGTRK-THDG)*Cradeg)-TASX*sin(SSL*Cradeg)
 # Vlg2 <- mean(Vlg[r2])
 # points(Time[r1], rep(Vlg1, length(r1)), type='l', lwd=3,col='red')
 # points(Time[r2], rep(Vlg2, length(r2)), type='l', lwd=3,col='red')
-plotWAC(Time, Vlt, ylab="Revised Lateral [m/s]")
-Vlt1 <- mean(Vlt[r1])
-Vlt2 <- mean(Vlt[r2])
+Z <- plotWAC(Time, Vlt, ylab="Revised Lateral [m/s]")
+Vlt1r <- mean(Vlt[r1], na.rm=TRUE)
+Vlt2r <- mean(Vlt[r2], na.rm=TRUE)
 #print (c(Vlg1,Vlg2))
-points(Time[r1], rep(Vlt1, length(r1)), type='l', lty=2,lwd=3,col='red')
-points(Time[r2], rep(Vlt2, length(r2)), type='l', lty=2,lwd=3,col='red')
-print(sprintf("Lateral wind components with new calibration: %f %f",Vlt1,Vlt2))
+Z <- points(Time[r1], rep(Vlt1r, length(r1)), type='l', lty=2,lwd=3,col='red')
+Z <- points(Time[r2], rep(Vlt2r, length(r2)), type='l', lty=2,lwd=3,col='red')
 detach(DataP)
 
 @
 
-<<getCircleData>>=
+The conditions were not ideal during this maneuver, however, with
+important variability along each of the legs as shown in Fig.~3 and
+with some mis-alignment of the two legs, so it is worthwhile to consider
+other maneuvers. Another reverse-heading maneuver was flown on flight
+9, with reverse legs 19:31:00--19:34:00 and 19:36:10--19:39:10. The sideslip offset determined from this maneuver is slightly larger than that from the Flight-4 maneuver, 1.50$^{\circ}$ instead of 1.40$^{\circ}$, but  as shown in Fig.~\ref{fig:RevHFig2}
+the conditions were steadier for this case.   A remaining source of variability
+in the sideslip offset determined in this way is error in heading,
+because it is not possible to separate an offset in sideslip from
+an offset in heading using reverse-heading maneuvers. Because the
+heading standard uncertainty is 0.05$^{\circ}$, uncertainty at this
+level also characterizes the offset in sideslip. This offset will be used for preliminary calculations in the next section, where a further refinement in the sideslip offset can be made.
 
+
+<<getCircleData, include=TRUE>>=
+
+#print (sprintf("Longitudinal wind averages: %f %f",Vlg1,Vlg2))
+#print (sprintf("Lateral wind averages:      %f %f",Vlt1,Vlt2))
+#print(sprintf("Lateral wind components with new calibration: %f %f",Vlt1r,Vlt2r))
 require(stats) 
 D <- Data[setRange (Data$Time, 191900, 192700), ]
-cfs[1] <- cfs[1] + 1.6
+## cfs[1] <- cfs[1] + 1.545
+## the following results from the rev-heading evaluation:
+cfs[1] <- 1.50
 D["SS"] <- cfs[1] + cfs[2]*D$BDIFR/D$QCF
 startL <- 191936
 endL <- 192228
@@ -551,39 +752,42 @@ and that the roll angle be maintained constant. For this flight segment,
 the left-turn circles had a roll angle of \Sexpr{round(meanr1,2)}$\pm$\Sexpr{round(sdr1,2)}
 and the right-turn circles had roll angle \Sexpr{round(meanr2,2)}$\pm$\Sexpr{round(sdr2,2)},
 while the mean true airspeed for these circles was \Sexpr{round(meanv,1)}$\pm$\Sexpr{round(sdv,1)}.
-The steadiness of these measurements indicate that this maneuver was
+The steadiness of these measurements indicates that this maneuver was
 flown with good precision and reasonably symmetrically, although the
-difference in roll is larger than is characteristic of the GV and
-may indicate some trim adjustment. The mean roll angles are within
+difference in roll is larger than is characteristic of similar maneuvers with the GV and may indicate some trim adjustment. The mean roll angles are within
 1.5$^{\circ}$ and are quite steady for each turn direction, so it
 will be a reasonable approximation to assume that these patterns are
 circular.
+
+Because the circles are flown with turn rates of about 1.5$^{\circ}$/s, small errors in the timing of measurements entering the wind calculation can lead to significant errors. The primary comparison used here is to the ground-speed as provided by GPS, so the timing of that signal relative to the corresponding IRU measurements is especially critical for this analysis. As processed, the data file (FRAPPErf09R.nc) used offsets of -2000\,ms for GGVEW and GGVNS along with an offset of -80\,ms for the IRU measurements including VEW and VNS. High-rate (25\,Hz) measurements were used to study the time shifts, in two ways. First, the standard error between GGVNS and VNS, or between GGVEW and VEW, was minimized by shifting GGVNS or GGVEW in time; both comparisons gave minimum RMS errors (of about 0.1\,m/s) for a time shift of +11 25-Hz samples, or 440\,ms. Second, the heading shift discussed in the next section was used as a test of this result. Without shift in timing, the left-turn circle indicated a heading error of about +1$^{\circ}$ and the right-turn circle about -1$^{\circ}$; after timing adjustment of GGVEW/GGVNS by 440\,ms, the respective errors were -0.1$^{\circ}$ and -0.2$^{\circ}$ for the left-turn and right-turn circles. This confirmed that the dominant contribution to the error in heading was from the time-lag in GGVEW/GGVNS, which would be expected to produce opposite errors for left-turn and right-turn circles.
+
+The indicated shift was 11 samples forward in time; i.e., GGVEW[12] was replaced by GGVEW[1]. In processing, the assumed lag was -2000\,ms (GGVEW[1] replaced by GGVEW[101]). This suggests that the time lag of -2000\,ms should be replaced by a lag of -1560\,ms, if the lag for VEW/VNS is kept at 80\,ms. A similar study of the lag applicable to the NOVATEL-GPS measurements GGVNS\_NVTL/GGVEW\_NVTL indicated that the time shift was +120\,ms, placing these measurements 200\,ms ahead of the IRU measurements. This relatively small shift probably should be ignored in processing and the lag kept at zero to avoid the awkwardness of positive lag values. 
 
 <<plotGSRMS>>=
 
 # define a chisquare error function:
 csq <- function (x, D) {
   hdg <- (D$THDG+D$SS*cos(D$ROLL*pi/180)+x[4]) * pi / 180.
-  dvx <- D$GGVEWB - (x[2] + x[1]*sin(hdg))
-  dvy <- D$GGVNSB - (x[3] + x[1]*cos(hdg))
+  dvx <- D$GGVEW - (x[2] + x[1]*sin(hdg))
+  dvy <- D$GGVNS - (x[3] + x[1]*cos(hdg))
   chisq <- sum (dvx**2 + dvy**2)
 }
 # try shifting GGVxxB forward n samples
 rms <- vector("numeric", 29)
-GGVEWB <- D$GGVEWB
-GGVNSB <- D$GGVNSB
-NL <- length(D$GGVEWB)
+GGVEW <- D$GGVEW
+GGVNS <- D$GGVNS
+NL <- length(D$GGVEW)
 rmsmin <- 1000
 #for (n in 1:1) { 
-  #D$GGVNSB <- c(D$GGVNSB[(1+n):NL],rep(D$GGVNSB[NL],n))
-  #D$GGVEWB <- c(D$GGVEWB[(1+n):NL],rep(D$GGVEWB[NL],n))
+  #D$GGVNS <- c(D$GGVNS[(1+n):NL],rep(D$GGVNS[NL],n))
+  #D$GGVEW <- c(D$GGVEW[(1+n):NL],rep(D$GGVEW[NL],n))
   wx <- 12.3
   wy <- 13.2
   V <- 154.
   hdg <- D$THDG * Cradeg
   A <- nlm (csq, c(V, wx, wy, -0.1), D, hessian=TRUE)
-  #D$GGVEWB <- GGVEWB
-  #D$GGVNSB <- GGVNSB
+  #D$GGVEW <- GGVEW
+  #D$GGVNS <- GGVNS
   #print(A$estimate)
   V <- A$estimate[1]
   wx <- A$estimate[2]
@@ -602,8 +806,8 @@ rmsmin <- 1000
 #}
 
 # impose best-fit shift nbest units forward in time
-#D$GGVNSB <- c(D$GGVNSB[(1+nbest):NL],rep(D$GGVNSB[NL],nbest))
-#D$GGVEWB <- c(D$GGVEWB[(1+nbest):NL],rep(D$GGVEWB[NL],nbest))
+#D$GGVNS <- c(D$GGVNS[(1+nbest):NL],rep(D$GGVNS[NL],nbest))
+#D$GGVEW <- c(D$GGVEW[(1+nbest):NL],rep(D$GGVEW[NL],nbest))
 # best-fit wind:
 bestWD <- (atan2(bestFit[2], bestFit[3]) / Cradeg + 180.) %% 360
 bestWS <- sqrt(bestFit[2]**2 + bestFit[3]**2)
@@ -619,12 +823,13 @@ D["AA"] <- (D$THDG-mwd) %% 360
 hdg <- (D$THDG+bestFit[4])*Cradeg
 vx <- bestFit[1] * cos(hdg) + bestFit[2]   
 vy <- bestFit[1] * sin(hdg) + bestFit[3]
-gs <- sqrt(D$GGVEWB**2+D$GGVNSB**2)
+gs <- sqrt(D$GGVEW**2+D$GGVNS**2)
 vs <- sqrt(vx**2+vy**2)
 rmsgs <- (sum((gs-vs)**2)/length(gs))**0.5
 # restore original values
-#D$GGVNSB <- GGVNSB
-#D$GGVEWB <- GGVEWB
+#D$GGVNS <- GGVNS
+#D$GGVEW <- GGVEW
+rm (GGVEW, GGVNS)
 
 @
 
@@ -656,10 +861,10 @@ The resulting best-fit values, with wind converted to wind direction
 $\bar{v_{d}}$ and wind speed $\bar{v_{s}}$, are shown in Table~\ref{tab:GSmin}
 and plotted in Fig.~\ref{fig:PlotGSvsWSc}.
 
-<<PlotGSvsWSc, fig.lp="fig:", fig.cap="The ground-speed components measured by GPS (blue line, EW; green line, NS) and the corresponding results from the fit (red dashed lines) for the period of the circle maneuver.", include=TRUE>>=
+<<PlotGSvsWSc, fig.lp="fig:", fig.cap="\\textsl{The ground-speed components measured by GPS (blue line, EW; green line, NS) and the corresponding results from the fit (red dashed lines) for the period of the circle maneuver.}", include=TRUE>>=
 
-Z <- plotWAC(D$Time, D$GGVEWB, ylab="GS Component, m/s", lwd=2)
-Z <- lineWAC(D$Time, D$GGVNSB, col='green', lwd=2)
+Z <- plotWAC(D$Time, D$GGVEW, ylab="GS Component, m/s", lwd=2)
+Z <- lineWAC(D$Time, D$GGVNS, col='green', lwd=2)
 Z <- lineWAC(D$Time, vx, col='red',lwd=2,lty=2)
 Z <- lineWAC(D$Time, vy, col='red',lwd=2,lty=2)
 subtitle <- sprintf("best fit: red dashed lines")
@@ -673,18 +878,18 @@ title(main="G-EW [blue]; G-NS [green]", cex.main=0.75, sub=subtitle)
 # define a chisquare error function:
 csq <- function (x, D) {
   hdg <- (D$THDG+D$SS*cos(D$ROLL*pi/180)+x[4]) * pi / 180.
-  dvx <- D$GGVEWB - (x[2] + x[1]*sin(hdg))
-  dvy <- D$GGVNSB - (x[3] + x[1]*cos(hdg))
+  dvx <- D$GGVEW - (x[2] + x[1]*sin(hdg))
+  dvy <- D$GGVNS - (x[3] + x[1]*cos(hdg))
   chisq <- sum (dvx**2 + dvy**2)
 }
 DS <- D
 D <- D[t1,]
-NL <- length(D$GGVEWB)
+NL <- length(D$GGVEW)
 rmsminL <- 1000
 n <- 0
 # for (n in 9:29) {
-#   D$GGVNSB <- c(D$GGVNSB[(1+n):NL],rep(D$GGVNSB[NL],n))
-#   D$GGVEWB <- c(D$GGVEWB[(1+n):NL],rep(D$GGVEWB[NL],n))
+#   D$GGVNS <- c(D$GGVNS[(1+n):NL],rep(D$GGVNS[NL],n))
+#   D$GGVEW <- c(D$GGVEW[(1+n):NL],rep(D$GGVEW[NL],n))
   wx <- 12.3
   wy <- 13.2
   V <- 154.
@@ -708,8 +913,8 @@ n <- 0
 }
 
 # impose best-fit shift nbest units forward in time
-# D$GGVNSB <- c(D$GGVNSB[(1+nbest):NL],rep(D$GGVNSB[NL],nbest))
-# D$GGVEWB <- c(D$GGVEWB[(1+nbest):NL],rep(D$GGVEWB[NL],nbest))
+# D$GGVNS <- c(D$GGVNS[(1+nbest):NL],rep(D$GGVNS[NL],nbest))
+# D$GGVEW <- c(D$GGVEW[(1+nbest):NL],rep(D$GGVEW[NL],nbest))
 # best-fit wind:
 bestWDL <- (atan2(bestFitL[2], bestFitL[3]) / Cradeg + 180.) %% 360
 bestWSL <- sqrt(bestFitL[2]**2 + bestFitL[3]**2)
@@ -718,12 +923,12 @@ mwsL <- mean(D$WSC, na.rm=TRUE)
 mtasL <- mean(D$TASX, na.rm=TRUE)
 D <- DS		# restore original, then repeat for right turns
 D <- D[t2,]
-NL <- length(D$GGVEWB)
+NL <- length(D$GGVEW)
 rmsminR <- 1000
 n <- 0
 # for (n in 9:29) {
-#   D$GGVNSB <- c(D$GGVNSB[(1+n):NL],rep(D$GGVNSB[NL],n))
-#   D$GGVEWB <- c(D$GGVEWB[(1+n):NL],rep(D$GGVEWB[NL],n))
+#   D$GGVNS <- c(D$GGVNS[(1+n):NL],rep(D$GGVNS[NL],n))
+#   D$GGVEW <- c(D$GGVEW[(1+n):NL],rep(D$GGVEW[NL],n))
   wx <- 12.3
   wy <- 13.2
   V <- 154.
@@ -747,8 +952,8 @@ n <- 0
 }
 
 # impose best-fit shift nbest units forward in time
-# D$GGVNSB <- c(D$GGVNSB[(1+nbest):NL],rep(D$GGVNSB[NL],nbest))
-# D$GGVEWB <- c(D$GGVEWB[(1+nbest):NL],rep(D$GGVEWB[NL],nbest))
+# D$GGVNS <- c(D$GGVNS[(1+nbest):NL],rep(D$GGVNS[NL],nbest))
+# D$GGVEW <- c(D$GGVEW[(1+nbest):NL],rep(D$GGVEW[NL],nbest))
 # best-fit wind:
 bestWDR <- (atan2(bestFitR[2], bestFitR[3]) / Cradeg + 180.) %% 360
 bestWSR <- sqrt(bestFitR[2]**2 + bestFitR[3]**2)
@@ -762,21 +967,40 @@ D <- DS		# restore original
 <<gs-only-analysis, include=TRUE>>=
 
 D["WS"] <- D$WSC
-D["Ang"] <- (D$THDG+(D$SS+0.11)*cos(D$ROLL*pi/180)-mwd) %% 360
+D["Ang"] <- (D$THDG+(D$SS)*cos(D$ROLL*pi/180)-mwd) %% 360
 D["TurnDirection"] <- as.integer(ifelse((D$ROLL > 0),1,2))
 DF <- D[c(t1,t2),]
-fmx1 <- lm(GGSPDB[DF$TurnDirection == 2] ~ sin(AA[DF$TurnDirection == 2]*pi/180)+cos(AA[DF$TurnDirection == 2]*pi/180), data=DF)
+fmx1 <- lm(GGSPD[DF$TurnDirection == 2] ~ sin(AA[DF$TurnDirection == 2]*pi/180)+cos(AA[DF$TurnDirection == 2]*pi/180), data=DF)
 cfx1 <- coefficients(fmx1)
-fmx2 <- lm(GGSPDB[DF$TurnDirection == 1] ~ sin(AA[DF$TurnDirection == 1]*pi/180)+cos(AA[DF$TurnDirection == 1]*pi/180), data=DF)
+fmx2 <- lm(GGSPD[DF$TurnDirection == 1] ~ sin(AA[DF$TurnDirection == 1]*pi/180)+cos(AA[DF$TurnDirection == 1]*pi/180), data=DF)
 cfx2 <- coefficients(fmx2)
-gsdiff1 <- max(D$GGSPDB[t1]) - min(D$GGSPDB[t1])
-gsdiff2 <- max(D$GGSPDB[t2]) - min(D$GGSPDB[t2])
+gsdiff1 <- max(D$GGSPD[t1]) - min(D$GGSPD[t1])
+gsdiff2 <- max(D$GGSPD[t2]) - min(D$GGSPD[t2])
 Z1 <- cfx1[1]+cfx1[2]*sin(DF$AA*pi/180.)+cfx1[3]*cos(DF$AA*pi/180.)
 Z2 <- cfx2[1]+cfx2[2]*sin(DF$AA*pi/180.)+cfx2[3]*cos(DF$AA*pi/180.)
 gsfdiff1 <- max(Z1) - min(Z1)
 gsfdiff2 <- max(Z2) - min(Z2)
 
 
+
+@
+
+
+<<gs-only-plot, fig.lp="fig:", fig.cap="\\textsl{Ground speed (GGSPD) vs the angle of flight relative to the mean wind direction, for the circle pattern shown in Fig.\\ \\ref{fig:CircleFlightPatterns-1}. The dashed orange line represents a fit to a sinusoidal pattern separately for the right-turn and left-turn segments.}", include=TRUE>>=
+clr = c("fit", "left", "right")
+col = c("darkorange", "blue", "darkgreen")
+g <- ggplot(data=DF, aes(x=AA, y=GGSPD))
+g <- g + geom_point(data=DF[DF$TurnDirection == 2,],size=2, aes(colour=clr[2],shape=clr[2]))
+g <- g + geom_point(data=DF[DF$TurnDirection == 1,],size=2, aes(colour=clr[3],shape=clr[3]))
+g <- g + geom_line(aes(y=cfx1[1]+cfx1[2]*sin(DF$AA*pi/180.)+cfx1[3]*cos(DF$AA*pi/180.),  colour=clr[1]), lwd=1, lty=2)
+g <- g + geom_line(aes(y=cfx2[1]+cfx2[2]*sin(DF$AA*pi/180.)+cfx2[3]*cos(DF$AA*pi/180.),  colour=clr[1]), lwd=1, lty=2)
+g <- g + scale_colour_manual("", labels = clr, values = col)
+g <- g + scale_shape_manual ("", guide=FALSE, labels = clr, values = rep(20,3))
+g <- g + xlab("Heading - Wind Dir.") + ylab("Ground Speed [m/s]")+theme_WAC()     
+g <- g + theme(legend.position=c(0.75,0.94))
+g
+# plot(AA[t1], D$GGSPD[t1], pch=19, col='blue')
+# points(AA[t2], D$GGSPD[t2], pch=19, col='darkgreen')
 
 @
 
@@ -798,13 +1022,13 @@ mean of measurements & \Sexpr{format(round(mwd,1), nsmall=1)} & \Sexpr{format(ro
 \midrule 
 left turns & \Sexpr{format(round(bestWDL,1), nsmall=1)} & \Sexpr{round(bestWSL,1)} & \Sexpr{round(bestFitL[1],1)} & \Sexpr{round(bestFitL[4],1)} & \Sexpr{format(round(rmsminL,1), nsmall=1)}\tabularnewline
 \midrule 
-right turns & \Sexpr{format(round(bestWDR,1), nsmall=1)} & \Sexpr{round(bestWSR,1)} & \Sexpr{round(bestFitR[1],1)} & \Sexpr{round(bestFitL[4],1)} & \Sexpr{format(round(rmsminR,1), nsmall=1)}\tabularnewline
+right turns & \Sexpr{format(round(bestWDR,1), nsmall=1)} & \Sexpr{round(bestWSR,1)} & \Sexpr{round(bestFitR[1],1)} & \Sexpr{round(bestFitR[4],1)} & \Sexpr{format(round(rmsminR,1), nsmall=1)}\tabularnewline
 \bottomrule
 \end{tabular}
 \par\end{centering}
 
-\protect\caption{The results obtained by minimizing the error measure (\ref{eq:gs-chisq})
-for the circle maneuver.\label{tab:GSmin}}
+\protect\caption{\textsl{The results obtained by minimizing the error measure (\ref{eq:gs-chisq})
+for the circle maneuver.}\label{tab:GSmin}}
 \end{table}
 
 \par\end{center}
@@ -832,66 +1056,40 @@ of ground speed is much less uncertain that this, so the suggested
 conclusion is that the difference in average wind is real in the regions
 where the two circles were flown. This difference also contributes
 to the rather large residual error because the combined fit assumes
-that a single wind vector characterizes both circles. Figure \ref{fig:gw-only-plot}
+that a single wind vector characterizes both circles. Figure \ref{fig:gs-only-plot}
 is evidence that the right-turn circle provides a more consistent
-result, so it will be emphasized in the following analysis. That circle
-indicates that the wind vector is from 287$^{\circ}$ at 6.9 m/s and
-that there is a heading error of 0.6$^{\circ}$. This is outside the
-expected standard uncertainty of the heading provided by the inertial
-reference system, but the angle $\Psi$ contains not only any error
-in heading but also any error in sideslip. Furthermore, small differences
-in the times when the measurements are acquired can affect the deduced
-heading error because the aircraft is in a steady turn and an error
-of 0.6$^{\circ}$ would result from a timing error of about 0.3 s.
-The reverse-heading maneuvers showed that the error in sideslip, there
-found to be 1.6$^{\circ}$, is larger than the error indicated here
-for heading. The combination of these two errors is discussed more
-in connection with the circle maneuvers.
+result, so that turn direction will be emphasized in the following analysis. That circle
+indicates that the wind vector is from \Sexpr{format(round(bestWDR,1), nsmall=1)}$^{\circ}$ at \Sexpr{round(bestWSR,1)} m/s and
+that there is a heading error of \Sexpr{round(bestFitR[4],1)}$^{\circ}$. A -0.2$^{\circ}$ adjustment in heading, introduced via calibration coefficients, was already made on the basis of a preliminary version of the present study, so this indicates that the heading offset should be reset to zero. However, the angle $\psi$ contains not only any error
+in heading but also any error in sideslip, so this result will be refined below where those errors are determined separately.  
 
-<<gs-only-plot, fig.lp="fig:", fig.cap="Ground speed (GGSPDB) vs the angle of flight relative to the mean wind direction, for the circle pattern shown in Fig.\\ \\ref{fig:CircleFlightPatterns-1}. The dashed orange line represents a fit to a sinusoidal pattern separately for the right-turn and left-turn segments.", include=TRUE>>=
-clr = c("fit", "left", "right")
-col = c("darkorange", "blue", "darkgreen")
-g <- ggplot(data=DF, aes(x=AA, y=GGSPDB))
-g <- g + geom_point(data=DF[DF$TurnDirection == 2,],size=2, aes(colour=clr[2],shape=clr[2]))
-g <- g + geom_point(data=DF[DF$TurnDirection == 1,],size=2, aes(colour=clr[3],shape=clr[3]))
-g <- g + geom_line(aes(y=cfx1[1]+cfx1[2]*sin(DF$AA*pi/180.)+cfx1[3]*cos(DF$AA*pi/180.),  colour=clr[1]), lwd=1, lty=2)
-g <- g + geom_line(aes(y=cfx2[1]+cfx2[2]*sin(DF$AA*pi/180.)+cfx2[3]*cos(DF$AA*pi/180.),  colour=clr[1]), lwd=1, lty=2)
-g <- g + scale_colour_manual("", labels = clr, values = col)
-g <- g + scale_shape_manual ("", guide=FALSE, labels = clr, values = rep(20,3))
-g <- g + xlab("Heading - Wind Dir.") + ylab("Ground Speed [m/s]")+theme_WAC()     
-g <- g + theme(legend.position=c(0.75,0.94))
-g
-# plot(AA[t1], D$GGSPDB[t1], pch=19, col='blue')
-# points(AA[t2], D$GGSPDB[t2], pch=19, col='darkgreen')
-
-@
 
 <<plotGSRMS2, echo=FALSE, include=FALSE>>=
 
 # define a chisquare error function:
 csq3 <- function (x, D) {
   hdg <- (D$THDG+D$SS*cos(D$ROLL*pi/180)+x[4]) * pi / 180.
-  dvx <- D$GGVEWB - (x[2] + (D$TASX+x[1])*sin(hdg))
-  dvy <- D$GGVNSB - (x[3] + (D$TASX+x[1])*cos(hdg))
+  dvx <- D$GGVEW - (x[2] + (D$TASX+x[1])*sin(hdg))
+  dvy <- D$GGVNS - (x[3] + (D$TASX+x[1])*cos(hdg))
   chisq <- sum (dvx**2 + dvy**2)
 }
 # # try shifting GGVxxB forward n samples
 # rms <- vector("numeric", 29)
-GGVEWB <- D$GGVEWB
-GGVNSB <- D$GGVNSB
-NL <- length(D$GGVEWB)
+GGVEW <- D$GGVEW
+GGVNS <- D$GGVNS
+NL <- length(D$GGVEW)
 rmsmin <- 1000
 n = 0
 # for (n in 9:29) {
-#   D$GGVNSB <- c(D$GGVNSB[(1+n):NL],rep(D$GGVNSB[NL],n))
-#   D$GGVEWB <- c(D$GGVEWB[(1+n):NL],rep(D$GGVEWB[NL],n))
+#   D$GGVNS <- c(D$GGVNS[(1+n):NL],rep(D$GGVNS[NL],n))
+#   D$GGVEW <- c(D$GGVEW[(1+n):NL],rep(D$GGVEW[NL],n))
   wx <- 12.3
   wy <- 13.2
   dV <- 1.
   hdg <- D$THDG * Cradeg
   A <- nlm (csq, c(dV, wx, wy, -0.1), D, hessian=TRUE)
-#   D$GGVEWB <- GGVEWB
-#   D$GGVNSB <- GGVNSB
+#   D$GGVEW <- GGVEW
+#   D$GGVNS <- GGVNS
     #print(A$estimate)
   dV <- A$estimate[1]
   wx <- A$estimate[2]
@@ -910,8 +1108,8 @@ n = 0
 # }
 
 # impose best-fit shift nbest units forward in time
-# D$GGVNSB <- c(D$GGVNSB[(1+nbest):NL],rep(D$GGVNSB[NL],nbest))
-# D$GGVEWB <- c(D$GGVEWB[(1+nbest):NL],rep(D$GGVEWB[NL],nbest))
+# D$GGVNS <- c(D$GGVNS[(1+nbest):NL],rep(D$GGVNS[NL],nbest))
+# D$GGVEW <- c(D$GGVEW[(1+nbest):NL],rep(D$GGVEW[NL],nbest))
 # best-fit wind:
 bestWD <- (atan2(bestFit[2], bestFit[3]) / Cradeg + 180.) %% 360
 bestWS <- sqrt(bestFit[2]**2 + bestFit[3]**2)
@@ -922,19 +1120,19 @@ mtas <- mean(D$TASX, na.rm=TRUE)
 # now repeat this for left turns separately
 DS <- D		# save this
 D <- D[t1,]	# left turn data only
-NL <- length(D$GGVEWB)
+NL <- length(D$GGVEW)
 rmsminL <- 1000
 n = 0
 # for (n in 9:29) {
-#   D$GGVNSB <- c(D$GGVNSB[(1+n):NL],rep(D$GGVNSB[NL],n))
-#   D$GGVEWB <- c(D$GGVEWB[(1+n):NL],rep(D$GGVEWB[NL],n))
+#   D$GGVNS <- c(D$GGVNS[(1+n):NL],rep(D$GGVNS[NL],n))
+#   D$GGVEW <- c(D$GGVEW[(1+n):NL],rep(D$GGVEW[NL],n))
   wx <- 12.3
   wy <- 13.2
   dV <- 1.
   hdg <- D$THDG * Cradeg
   A <- nlm (csq, c(dV, wx, wy, -0.1), D, hessian=TRUE)
-#   D$GGVEWB <- GGVEWB
-#   D$GGVNSB <- GGVNSB
+#   D$GGVEW <- GGVEW
+#   D$GGVNS <- GGVNS
     #print(A$estimate)
   dVL <- A$estimate[1]
   wxL <- A$estimate[2]
@@ -953,8 +1151,8 @@ n = 0
 # }
 
 # impose best-fit shift nbest units forward in time
-# D$GGVNSB <- c(D$GGVNSB[(1+nbest):NL],rep(D$GGVNSB[NL],nbest))
-# D$GGVEWB <- c(D$GGVEWB[(1+nbest):NL],rep(D$GGVEWB[NL],nbest))
+# D$GGVNS <- c(D$GGVNS[(1+nbest):NL],rep(D$GGVNS[NL],nbest))
+# D$GGVEW <- c(D$GGVEW[(1+nbest):NL],rep(D$GGVEW[NL],nbest))
 # best-fit wind:
 bestWDL <- (atan2(bestFitL[2], bestFitL[3]) / Cradeg + 180.) %% 360
 bestWSL <- sqrt(bestFitL[2]**2 + bestFitL[3]**2)
@@ -965,19 +1163,19 @@ mtasL <- mean(D$TASX, na.rm=TRUE)
 # now right turns only
 D <- DS		# restore this
 D <- D[t2,]
-NL <- length(D$GGVEWB)
+NL <- length(D$GGVEW)
 rmsminR <- 1000
 n = 0
 # for (n in 9:29) {
-#   D$GGVNSB <- c(D$GGVNSB[(1+n):NL],rep(D$GGVNSB[NL],n))
-#   D$GGVEWB <- c(D$GGVEWB[(1+n):NL],rep(D$GGVEWB[NL],n))
+#   D$GGVNS <- c(D$GGVNS[(1+n):NL],rep(D$GGVNS[NL],n))
+#   D$GGVEW <- c(D$GGVEW[(1+n):NL],rep(D$GGVEW[NL],n))
   wx <- 12.3
   wy <- 13.2
   dV <- 1.
   hdg <- D$THDG * Cradeg
   A <- nlm (csq, c(dV, wx, wy, -0.1), D, hessian=TRUE)
-#   D$GGVEWB <- GGVEWB
-#   D$GGVNSB <- GGVNSB
+#   D$GGVEW <- GGVEW
+#   D$GGVNS <- GGVNS
     #print(A$estimate)
   dVR <- A$estimate[1]
   wxR <- A$estimate[2]
@@ -996,8 +1194,8 @@ n = 0
 # }
 
 # impose best-fit shift nbest units forward in time
-# D$GGVNSB <- c(D$GGVNSB[(1+nbest):NL],rep(D$GGVNSB[NL],nbest))
-# D$GGVEWB <- c(D$GGVEWB[(1+nbest):NL],rep(D$GGVEWB[NL],nbest))
+# D$GGVNS <- c(D$GGVNS[(1+nbest):NL],rep(D$GGVNS[NL],nbest))
+# D$GGVEW <- c(D$GGVEW[(1+nbest):NL],rep(D$GGVEW[NL],nbest))
 # best-fit wind:
 bestWDR <- (atan2(bestFitR[2], bestFitR[3]) / Cradeg + 180.) %% 360
 bestWSR <- sqrt(bestFitR[2]**2 + bestFitR[3]**2)
@@ -1006,6 +1204,7 @@ mwsR <- mean(D$WSC, na.rm=TRUE)
 mtasR <- mean(D$TASX, na.rm=TRUE)
 
 D <- DS
+rm (GGVEW, GGVNS)
 
 @
 
@@ -1014,7 +1213,7 @@ D <- DS
 hdg <- (D$THDG+bestFit[4])*Cradeg
 vx <- bestFit[1] * cos(hdg) + bestFit[2]   
 vy <- bestFit[1] * sin(hdg) + bestFit[3]
-gs <- sqrt(D$GGVEWB**2+D$GGVNSB**2)
+gs <- sqrt(D$GGVEW**2+D$GGVNS**2)
 vs <- sqrt(vx**2+vy**2)
 rmsgs <- (sum((gs-vs)**2)/length(gs))**0.5
 
@@ -1052,7 +1251,7 @@ so that $0^{\circ}$ corresponds to downwind flight and the difference
 between values at 0 and 180$^{\circ}$corresponds to $2\delta V$,
 while the difference from $90$ to 270$^{\circ}$ represents $2V\delta\psi$. 
 
-<<sine-cosine-plot, fig.lp="fig:", fig.cap="Predicted dependence of measured wind speed on direction of flight relative to the wind direction, for assumed errors of $\\delta V=1$ m/s and $\\delta\\psi=0.3^{\\circ}$.", include=TRUE>>=
+<<sine-cosine-plot, fig.lp="fig:", fig.cap="\\textsl{Predicted dependence of measured wind speed on direction of flight relative to the wind direction, for assumed errors of $\\delta V=1$ m/s and $\\delta\\psi=0.3^{\\circ}$.}", include=TRUE>>=
 
 op <- par (mfrow=c(1,1), mar=c(4,4,0,2)+0.1)
 A1 <- 1.
@@ -1077,23 +1276,26 @@ lines(c(0.,360.),c(bestWS-A2,bestWS-A2), col='darkgreen',lty=2,lwd=0.7)
 
 @
 
-<<sine-fit>>=
-WS <- D$WSC
-Ang <- (D$THDG+D$SS*cos(D$ROLL*pi/180)-mwd) %% 360
+<<sine-fit, include=FALSE>>=
+D$WS <- D$WSC
+D$Ang <- ((D$THDG+(D$SSLIP)*cos(D$ROLL*pi/180)-mwd) %% 360) * pi / 180
 # left turns:
 rs <- setRange(D$Time, startL, endL)
 DF <- D[rs,]
-DF["Ang"] <- Ang[rs]
-DF["WS"] <- WS[rs]
-fm1 <- lm (WS~sin(Ang*pi/180.)+cos(Ang*pi/180.), data=DF)
+## DF["Ang"] <- Ang[rs]
+## DF["WS"] <- WS[rs]
+fm1 <- lm (WS~I(sin(Ang))+I(cos(Ang)), data=DF)
 cf1 <- coefficients(fm1)
+## print(cf1)
 # right turns
 rsr <- setRange(D$Time, startR, endR)
 DF <- D[rsr,]
-DF["Ang"] <- Ang[rsr]
-DF["WS"] <- WS[rsr]
-fm2 <- lm (WS~sin(Ang*pi/180.)+cos(Ang*pi/180.), data=DF)
+## DF["Ang"] <- Ang[rsr]
+## DF["WS"] <- WS[rsr]
+fm2 <- lm (WS~I(sin(Ang))+I(cos(Ang)), data=DF)
 cf2 <- coefficients(fm2)
+## print(cf2)
+## sprintf("dV=%f, dH=%f", cf2[3], cf2[2]/(mtas*pi/180))
 
 @
 
@@ -1102,29 +1304,20 @@ fitting (\ref{eq:SinCosDep}) to observations. The measurements will
 be shown separately for the left-turn circles and the right-turn circles
 because there is a difference between them. Figures~\ref{fig:left-turn-circles}
 and \ref{fig:right-turn-circles} show the measurements, and the results
-of the fits are shown in Table \ref{tab:SinCosCoefficients}.%
-\footnote{The values for wind speed are similar to those in Table 1, but the
-estimated error in heading is much smaller. The reason is that the
-heading as used in this section has been corrected for the effect
-of sideslip, using (\ref{eq:dpsiprime}) below. %
-} The plots do not show a significant sinusoidal pattern as expect
-from Fig.~\ref{fig:sine-cosine-plot} but, for the more reliable
-case shown in Fig.~\ref{fig:right-turn-circles}, only show a total
-standard deviation in measured wind speed of about 0.5\,m/s, indicating
-an uncertainty limit within that range. The sine-function fit is not
-a very good representation of the data, but it indicates that the
-error in true airspeed is about 0.2 m/s and the error in heading is
-about -0.1$^{\circ}$ after adjustment for the measured sideslip.
-Because there are variations that appear to have larger amplitudes
-and do not follow the expected sinusoidal variation, it may be better
-to regard this fit and the scatter in Fig.~\ref{fig:right-turn-circles}
-as indications that the measurements have uncertainty limits within
-these values.
+of the fits are shown in Table \ref{tab:SinCosCoefficients}. 
+The plots do show a sinusoidal pattern as expected
+from Fig.~\ref{fig:sine-cosine-plot}, but there is significant scatter. For the more reliable
+case shown in Fig.~\ref{fig:right-turn-circles}, the total
+standard deviation in measured wind speed is about \Sexpr{round(sd(DF$WS),1)}\,m/s, indicating
+an uncertainty limit within that range, but the weak sinusoidal pattern also indicates the presence of systematic error. The fit indicates that the
+error in true airspeed is about \Sexpr{round(cf2[3],1)}\,m/s and the error in heading is
+about \Sexpr{round(cf2[2]/(mtas*pi/180),2)}$^{\circ}$ after adding the measured sideslip (using first-coefficient 1.5 for sideslip, following the indication from the second reverse-heading maneuver).
+
 \begin{table}
 \noindent \begin{centering}
 \begin{tabular}{ccccc}
 \toprule 
- & mean wind {[}m/s{]} & $\delta V$~{[}m/s{]} & $\delta\psi\,[^{\circ}]$ & residual error {[}m/s{]}\tabularnewline
+ & mean wind {[}m/s{]} & $\delta V$~{[}m/s{]} & $\delta\psi^{\prime}\,[^{\circ}]$ & residual error {[}m/s{]}\tabularnewline
 \midrule
 \midrule 
 left-turn circles & \Sexpr{format(round(cf1[1],1), nsmall=1)} & \Sexpr{format(round(cf1[3],1), nsmall=1)} & \Sexpr{format(round(cf1[2]/(mtas*pi/180.),2), nsmall=2)} & \Sexpr{round(summary(fm1)$sigma,2)}\tabularnewline
@@ -1134,18 +1327,20 @@ right-turn circles & \Sexpr{format(round(cf2[1],1), nsmall=1)} & \Sexpr{format(r
 \end{tabular}
 \par\end{centering}
 
-\protect\caption{Fit results for the left-turn and right-turn circles as fitted by
-(\ref{eq:SinCosDep}).\label{tab:SinCosCoefficients}}
+\protect\caption{\textsl{Fit results for the left-turn and right-turn circles as fitted by
+(\ref{eq:SinCosDep}). The angle $\delta\psi^{\prime}$, referred to as the heading error, is actually a combination of heading and sideslip error as given by Eq.\ \ref{eq:dpsiprime}. See revised values later in Table\ \ref{tab:Fit-results}, where the heading error is separated from the sideslip error.}\label{tab:SinCosCoefficients}}
 \end{table}
 
+Sensitivity tests, in which a fixed offset was added first to TASX and then to THDG, showed that adjustments had the expected results: Addition of the negative of the indicated errors resulted in revised estimates near zero. This indicates that, despite the large deviations from the sinusoidal pattern in the wind (as shown in Fig.\ \ref{fig:right-turn-circles}, esp.\ near the 270$^{\circ}$ direction), the fit results have the expected dependence on error in the true airspeed or heading.
 
-<<left-turn-circles, fig.lp="fig:", fig.cap="Measured wind speed from the left-turn circles in the circle pattern shown in Fig.\\ \\ref{fig:CircleFlightPatterns-1}, as a function of the difference between the heading and the mean wind direction.", include=TRUE>>=
+<<left-turn-circles, fig.lp="fig:", fig.cap="\\textsl{Measured wind speed from the left-turn circles in the circle pattern shown in Fig.\\ \\ref{fig:CircleFlightPatterns-1}, as a function of the difference between the heading and the mean wind direction.}", include=TRUE>>=
 
 clr = c("fit", "measurements", "fit")
 col = c("darkorange", "blue", "darkorange")
-g <- ggplot(data=DF, aes(x=Ang, y=WS))
+DF <- D[rs,]
+g <- ggplot(data=DF, aes(x=Ang*180/pi, y=WS))
 g <- g + geom_point(colour=col[2], size=2, aes(shape="measurements")) 
-g <- g + geom_line(aes(y=cf1[1]+cf1[2]*sin(DF$Ang*pi/180.)+cf1[3]*cos(DF$Ang*pi/180.),  colour=clr[1]), lwd=3)
+g <- g + geom_line(aes(y=cf1[1]+cf1[2]*sin(DF$Ang)+cf1[3]*cos(DF$Ang),  colour=clr[1]), lwd=3)
 g <- g + scale_colour_manual("", labels = clr, values = col)
 g <- g + scale_shape_manual ("", labels="measurements", values=19)
 g <- g + xlab("Heading - Wind Dir.") + ylab("Wind Speed [m/s]")+theme_WAC()     
@@ -1161,13 +1356,14 @@ print(g)
 
 @
 
-<<right-turn-circles, fig.lp="fig:", fig.cap="As for Fig.\\ \\ref{fig:left-turn-circles} but for the right-hand circles.", include=TRUE>>=
+<<right-turn-circles, fig.lp="fig:", fig.cap="\\textsl{As for Fig.\\ \\ref{fig:left-turn-circles} but for the right-hand circles.}", include=TRUE>>=
 
 clr = c("fit", "measurements", "fit")
 col = c("darkorange", "darkgreen", "darkorange")
-g <- ggplot(data=DF, aes(x=Ang, y=WS))
+DF <- D[rsr,]
+g <- ggplot(data=DF, aes(x=Ang*180/pi, y=WS))
 g <- g + geom_point(colour=col[2], size=2, aes(shape="measurements")) 
-g <- g + geom_line(aes(y=cf2[1]+cf2[2]*sin(DF$Ang*pi/180.)+cf2[3]*cos(DF$Ang*pi/180.),  colour=clr[1]), lwd=3)
+g <- g + geom_line(aes(y=cf2[1]+cf2[2]*sin(DF$Ang)+cf2[3]*cos(DF$Ang),  colour=clr[1]), lwd=3)
 g <- g + scale_colour_manual("", labels = clr, values = col)
 g <- g + scale_shape_manual ("", labels="measurements", values=19)
 g <- g + xlab("Heading - Wind Dir.") + ylab("Wind Speed [m/s]")+theme_WAC()     
@@ -1199,7 +1395,7 @@ as in the above tables is $\delta\psi^{\prime}$ given by
 \delta\psi^{\prime}=\delta\psi+\cos\phi\delta\beta\label{eq:dpsiprime}
 \end{equation}
 where $\phi$ is the roll angle and $\delta\beta$ is the offset in
-sideslip. The sideslip calibration was determined in Sect.~\ref{sub:Sensitivity-coefficient}
+sideslip. The sideslip calibration initially was determined 
 from yaw maneuvers, but those maneuvers also cannot separate an offset
 in heading from an offset in sideslip so the first coefficient in
 the calibration, representing the zero offset, is not constrained
@@ -1216,24 +1412,18 @@ the sideslip measurement in left vs right turns. In these two cases,
 some sideslip is introduced as the aircraft configuration remains
 slightly nose-up during the turn, and that sideslip should reverse
 sign by symmetry. The lift required to maintain altitude would be
-the same if the roll angles were opposite, and they nearly are for
+the same if the roll angles were opposite, as they nearly are for
 these maneuvers (1.46$^{\circ}$ larger for right turns), and the
 angle of attack is also close to the same, so the expected sign reversal
 in sideslip can be used to determine the offset in sideslip. The measurements
-of sideslip%
-\footnote{The sensitivity coefficients as determined in Sect.~\vref{SS-offset}
-have been used to construct this figure.%
-} are shown in Fig.~\ref{fig:plotSS}. The red dashed line shows the
+of sideslip 
+are shown in Fig.~\ref{fig:plotSS}. The red dashed line shows the
 indicated offset (-0.11$^{\circ}$) that is required if the two turn
-directions are to have the same magnitude of sideslip. where it is
-evident that an offset of about 0.11$^{\circ}$ needs to be added
-to the sideslip measurements to produce the expected symmetry. Because
-1.6$^{\circ}$ was already added to the coefficient determined from
-yaw maneuvers (originally -0.165) on the basis of the earlier analysis
-of the reverse-heading maneuver, i.e., 1.435$^{\circ}$, this indicates
-that the sideslip offset coefficient should be 1.55, or the resulting
+directions are to have the same magnitude of sideslip. Because
+1.5$^{\circ}$ was already used as the constant coefficient in sideslip
+calibration, this indicates that the best value of the first calibration coefficient ($e_0$ in Eq.\ \ref{eq:betaFunctionForm}) is 1.61; i.e., the resulting
 sensitivity coefficients for sideslip should be \{$e_{o},\, e_{1}$\}
-= \{1.55, 12.85\}. The estimated standard uncertainty in the first
+= \{1.61, \Sexpr{round(cfs[2], 3)}\}. The estimated standard uncertainty in the first
 coefficient is about 0.1 on the basis of differences among the various
 estimates of this coefficient and on the basis of uncertainty in the
 heading measurement on which some of these calibration methods depend.
@@ -1241,7 +1431,7 @@ The uncertainty in the second coefficient, estimated from the standard
 uncertainty with which the slope could be determined in Fig.~2, is
 about 0.04, 
 
-<<plotSS, fig.lp="fig:", fig.cap = "Measurement of sideslip during the circle maneuver from FRAPPE flight 9, with left-turn circles from 19:19:36 -- 19:22:28 UTC, followed by a straight segment and then right-turn circles 19:23:08 -- 19:26:02 UTC.", include=TRUE>>=
+<<plotSS, fig.lp="fig:", fig.cap = "\\textsl{Measurement of sideslip during the circle maneuver from FRAPPE flight 9, with left-turn circles from 19:19:36 -- 19:22:28 UTC, followed by a straight segment and then right-turn circles 19:23:08 -- 19:26:02 UTC.}", include=TRUE>>=
 
 Capn <- "Sideslip measured turning the circle maneuvers, first turning left (19:19:36 -- 19:22:28) and then turning right (19:23:08 -- 19:26:02). Mean values for these segments are indicated by dashed orange lines."
 Z <- plotWAC(D$Time, D$SS, ylab="Sideslip")
@@ -1254,23 +1444,22 @@ lines(c(D$Time[getIndex(D$Time,192308)], D$Time[getIndex(D$Time, 192602)]), c(yr
 
 @
 
-With this shift applied, the dependence of the left-turn and right-turn
-circles is shown in Fig.~\ref{fig:combined-circles}. 
+ 
 
-<<combined-circles, fig.lp="fig:", fig.cap="Wind speed as a function of heading relative to the wind direction, with a fit to the combined data set shown.", include=TRUE, fig.align='center'>>=
+<<combined-circles, fig.lp="fig:", fig.cap="\\textsl{Wind speed as a function of heading relative to the wind direction, with a fit to the combined data set shown.}", include=TRUE, fig.align='center'>>=
 
 # combined left and right turns
 rs <- c(setRange(D$Time,191936,192228),setRange(D$Time, 192308, 192602))
 DF <- D[rs,]
-fmc <- lm (WS~sin(Ang*pi/180.)+cos(Ang*pi/180.), data=DF)
+fmc <- lm (WS~sin(Ang)+cos(Ang), data=DF)
 cfc <- coefficients(fmc)
 
 clr = c("fit", "left", "right")
 col = c("darkorange", "blue", "darkgreen")
-g <- ggplot(data=DF, aes(x=Ang, y=WS))
+g <- ggplot(data=DF, aes(x=Ang*180/pi, y=WS))
 g <- g + geom_point(data=DF[DF$TurnDirection == 2,],size=2, aes(colour=clr[2],shape=clr[2]))
 g <- g + geom_point(data=DF[DF$TurnDirection == 1,],size=2, aes(colour=clr[3],shape=clr[3]))
-g <- g + geom_line(aes(y=cfc[1]+cfc[2]*sin(DF$Ang*pi/180.)+cfc[3]*cos(DF$Ang*pi/180.),  colour=clr[1]), lwd=3)
+g <- g + geom_line(aes(y=cfc[1]+cfc[2]*sin(DF$Ang)+cfc[3]*cos(DF$Ang),  colour=clr[1]), lwd=3)
 g <- g + scale_colour_manual("", labels = clr, values = col)
 g <- g + scale_shape_manual ("", guide=FALSE, labels = clr, values = rep(20,3))
 g <- g + xlab("Heading - Wind Dir.") + ylab("Wind Speed [m/s]")+theme_WAC()     
@@ -1282,14 +1471,17 @@ rmeanL <- mean(DF$ROLL[DF$TurnDirection == 2])
 rmeanR <- mean(DF$ROLL[DF$TurnDirection == 1])
 tasmL <- mean(DF$TASX[DF$TurnDirection == 2])
 tasmR <- mean(DF$TASX[DF$TurnDirection == 1])
-print (c(rmeanL, rmeanR))
-print(sprintf(" left turns: mean TAS = %.2f, ROLL = %.2f, right turns %.2f %.2f", tasmL, rmeanL, tasmR, rmeanR))
+#print (c(rmeanL, rmeanR))
+#print(sprintf(" left turns: mean TAS = %.2f, ROLL = %.2f, right turns %.2f %.2f", tasmL, rmeanL, tasmR, rmeanR))
 dv <- 0.5*mean(DF$TASX)*tan(rmeanR*pi/180)*(rmeanR+rmeanL)*pi/180
-print (sprintf(" predicted TAS difference is %.2f", dv))
+#print (sprintf(" predicted TAS difference is %.2f", dv))
+## this predicts faster flight in the right-turn circle, contrary
+## to observations. ??
 
 @
 
-The best-fit coefficients are as shown in Table~\vref{tab:Fit-results},
+With this shift applied, the dependence of the wind speed on flight direction for the combined left-turn and right-turn
+circles is shown in Fig.~\ref{fig:combined-circles}. The best-fit coefficients are as shown in Table~\ref{tab:Fit-results},
 where the values for left-turn-only and right-turn-only measurements
 are repeated and shown with the results from both circles combined.
 
@@ -1303,18 +1495,18 @@ are repeated and shown with the results from both circles combined.
  & mean wind {[}m/s{]} & $\delta V$~{[}m/s{]} & $\delta\psi\,[^{\circ}]$ & residual error {[}m/s{]}\tabularnewline
 \hline 
 \hline 
-left-turn circles & \Sexpr{round(cf1[1],1)} & \Sexpr{format(round(cf1[3],1), nsmall=1)} & \Sexpr{format(round(cf1[2]/(mtas*pi/180.),2), nsmall=2)} & \Sexpr{round(summary(fm1)$sigma,2)}\tabularnewline
+left-turn circles & \Sexpr{round(cf1[1],1)} & \Sexpr{format(round(cf1[3],1), nsmall=1)} & \Sexpr{format(round(cf1[2]/(mtas*pi/180.)+0.11*cos(27*pi/180),2), nsmall=2)} & \Sexpr{round(summary(fm1)$sigma,2)}\tabularnewline
 \hline 
-right-turn circles & \Sexpr{round(cf2[1],1)} & \Sexpr{format(round(cf2[3],1), nsmall=1)} & \Sexpr{format(round(cf2[2]/(mtas*pi/180.),2), nsmall=2)} & \Sexpr{round(summary(fm2)$sigma,2)}\tabularnewline
+right-turn circles & \Sexpr{round(cf2[1],1)} & \Sexpr{format(round(cf2[3],1), nsmall=1)} & \Sexpr{format(round(cf2[2]/(mtas*pi/180.)+0.11*cos(27*pi/180),2), nsmall=2)} & \Sexpr{round(summary(fm2)$sigma,2)}\tabularnewline
 \hline 
-combined & \Sexpr{round(cfc[1],1)} & \Sexpr{format(round(cfc[3],1), nsmall=1)} & \Sexpr{round(cfc[2]/(mtas*pi/180.)-0.11,2)} & \Sexpr{round(summary(fmc)$sigma,2)}\tabularnewline
+combined & \Sexpr{round(cfc[1],1)} & \Sexpr{format(round(cfc[3],1), nsmall=1)} & \Sexpr{format(round(cfc[2]/(mtas*pi/180.)+0.11*cos(27*pi/180),2), nsmall=2)} & \Sexpr{round(summary(fmc)$sigma,2)}\tabularnewline
 \hline 
 \end{tabular}
 \par\end{center}
 
-\protect\caption{Fit results for errors in true airspeed $V$ and heading $\Psi$ and
-the residual errors from the fits of Eq.~\vref{eq:SinCosDep} to
-the circles.\label{tab:Fit-results} }
+\protect\caption{\textsl{Fit results for errors in true airspeed $V$ and heading $\psi$ and
+the residual errors for the fits of Eq.~\vref{eq:SinCosDep} to
+the circles.}\label{tab:Fit-results} }
 %
 \end{minipage}}
 \end{table}
@@ -1328,12 +1520,12 @@ the circles.\label{tab:Fit-results} }
 \subsection{Sensitivity coefficients:}
 
 The coefficients in Table~\ref{tab:SensCoef} include all adjustments
-discussed in this memo and should be the best to use for FRAPPE. The
+discussed in this memo and should be the best to use for FRAPPE, provided that the dynamic pressure measurement QCFR is used in the equations for calculating angle-of-attack and sideslip from ADIFR and BDIFR. The
 coefficients are dependent on the accuracy of the attitude angles
 provided by the IRU and will be changed in cases where the pitch or
 heading aligns differently or otherwise develops errors different
 from those at the time these coefficients were determined. Both angles
-have uncertainty of about 0.05$^{\circ}$ so that contributes to the
+have uncertainty of about 0.05$^{\circ}$, so that contributes to the
 uncertainty in results from these fits.
 
 \noindent \begin{center}
@@ -1353,7 +1545,7 @@ SSRD & \Sexpr{format(round(cfs[1]+0.11,3), nsmall=3)} & \Sexpr{format(round(cfs[
 \end{tabular}
 \par\end{center}
 
-\protect\caption{Recommended sensitivity coefficients for the C-130 in FRAPPE\label{tab:SensCoef}}
+\protect\caption{\textsl{Recommended sensitivity coefficients for the C-130 in FRAPPE.}\label{tab:SensCoef}}
 %
 \end{minipage}}
 \end{table}
@@ -1368,19 +1560,20 @@ the formula for C-130 pressure corrections that was previously determined
 should remain valid. The formulas for PSFD, QCF, PSFRD, and QCFR are
 given with Eq.~\vref{eq:PCOReq2} of this memo.
 
+\subsection{GPS timing}
 
-\subsection{Corrections to TAS, sideslip, and heading ($V,\,\beta,\,\Psi):$}
+The time shift for variables like GGVEW/GGVNS should be -1540 instead of -2000.
 
-The results from the circle maneuver analyzed here are summarized
-in Table~\ref{tab:CircleCorrections}. The right-turn circle maneuver,
-which appears to be in more steady conditions than the left-turn circle,
-indicates that the airspeed may need adjustment by +0.2~m/s. This
-is small enough and still uncertain, because the conditions during
+\subsection{Corrections to TAS, sideslip, and heading ($V,\,\beta,\,\psi):$}
+
+No corrections are needed except that for sideslip (already incorporated into the coefficients in Table\ \ref{tab:SensCoef}) and perhaps a minor change in the heading offset (below). The results from the circle maneuver analyzed here are summarized
+in Table~\ref{tab:CircleCorrections}. The indicated quantities are errors, so correction terms would be the negative of these errors. The right-turn circle maneuver,
+which appears to be in more steady conditions than the left-turn circle and is therefore the basis for these recommendations,
+indicates that the airspeed may need adjustment by -\Sexpr{round(cf2[3],1)}\,m/s. This
+is small enough and still has uncertainty of about 0.2\,m/s, because the conditions during
 this circle maneuver were not as steady as desirable, so it appears
-preferable to make no further correction to the true airspeed. The
-sideslip correction is already incorporated in the summary table above.
-The heading correction appears reliable enough that a correction of
--0.2$^{\circ}$to heading appears justified and is recommended.
+preferable to make no further correction to the true airspeed. 
+The heading correction of \Sexpr{format(round((cf2[2]/(mtas*pi/180.)+0.11*cos(27*pi/180)),2), nsmall=2)} is also quite small, and the analysis was done on a data file where the assumed calibration coefficients for heading were \{-0.2, 1.0\}, so the indication here is that these calibration coefficients should either be changed to \{-0.1, 1.\} or \{0.,1.\}. Because the different ways of determining this heading offset produced answers that varied by about 0.1$^{\circ}$, it may be best to change the heading offset to -0.1 and consider the uncertainty to be about of this magnitude. 
 
 \noindent \begin{center}
 \begin{table}
@@ -1391,23 +1584,23 @@ The heading correction appears reliable enough that a correction of
 \toprule 
 \textbf{type} & \textbf{true airspeed error $\delta V$ {[}m/s{]}} & \textbf{sideslip error $\delta\beta$ {[}$^{\circ}${]}}%
 \footnote{included in Table \ref{tab:SensCoef} above for SSRD%
-} & \textbf{heading error $\delta\Psi$ {[}$^{\circ}${]}}\tabularnewline
+} & \textbf{heading error $\delta\psi$ {[}$^{\circ}${]}}\tabularnewline
 \midrule
 \midrule 
-left-turn & \Sexpr{format(round(cf1[3],1),nsmall=1)} & 0.11 & \Sexpr{format(round(cf1[2]/(mtas*pi/180.)-0.11,2), nsmall=2)}\tabularnewline
+left-turn & \Sexpr{format(round(cf1[3],1),nsmall=1)} & -0.11 & \Sexpr{format(round(cf1[2]/(mtas*pi/180.)+0.11*cos(27*pi/180),2), nsmall=2)}\tabularnewline
 \midrule 
-\textsl{\textcolor{red}{right-turn}} & \textsl{\textcolor{red}{\Sexpr{format(round(cf2[3],1),nsmall=1)}}} & \textsl{\textcolor{red}{0.11}} & \textsl{\textcolor{red}{\Sexpr{format(round(cf2[2]/(mtas*pi/180.)-0.11,2), nsmall=2)}}}\tabularnewline
+\textsl{\textcolor{red}{right-turn}} & \textsl{\textcolor{red}{\Sexpr{format(round(cf2[3],1),nsmall=1)}}} & \textsl{\textcolor{red}{-0.11}} & \textsl{\textcolor{red}{\Sexpr{format(round(cf2[2]/(mtas*pi/180.)+0.11*cos(27*pi/180),2), nsmall=2)}}}\tabularnewline
 \midrule 
-combined & \Sexpr{format(round(cfc[3],1),nsmall=1)} & 0.11 & \Sexpr{format(round(cfc[2]/(mtas*pi/180.)-0.11,2), nsmall=2)}\tabularnewline
+combined & \Sexpr{format(round(cfc[3],1),nsmall=1)} & -0.11 & \Sexpr{format(round(cfc[2]/(mtas*pi/180.)+0.11*cos(27*pi/180),2), nsmall=2)}\tabularnewline
 \bottomrule
 \end{tabular}
 \par\end{center}
 
-\protect\caption{Angle and airspeed adjustments suggested from the circle maneuver
+\protect\caption{\textsl{Angle and airspeed adjustments suggested from the circle maneuver
 of FRAPPE flight~9, 19:19--19:27 UTC. The highlighted results from
 the right turn appear to be more reliable than those from the left
 turn or the combined results because conditions were more uniform
-around the right-turn circle.\label{tab:CircleCorrections}}
+around the right-turn circle.}\label{tab:CircleCorrections}}
 %
 \end{minipage}}
 \end{table}
@@ -1424,27 +1617,42 @@ around the right-turn circle.\label{tab:CircleCorrections}}
 \textsf{\textcolor{blue}{-- End of Memo --\vfill\eject}}
 \par\end{center}
 
-Reproducibility:
+\textbf{Reproducibility:}
 
 \begin{tabular}{ll}
 \textsf{\textsc{\textcolor{blue}{Project:}}} & \Sexpr{thisFileName}\tabularnewline
 \textsf{\textsc{\textcolor{blue}{Archive package:}}} & \Sexpr{thisFileName}.zip\tabularnewline
 \textsf{\textsc{\textcolor{blue}{Contains:}}} & attachment list below\tabularnewline
 \textsf{\textsc{\textcolor{blue}{Program:}}} & \Sexpr{thisFileName}.Rnw\tabularnewline
-\textsf{\textsc{\textcolor{blue}{Original Data:}}} & /scr/raf\_data/\Sexpr{Project}/\Sexpr{Flight}.nc, /scr/raf\_data/FRAPPE/FRAPPErf04.nc \tabularnewline
-\textsf{\textsc{\textcolor{blue}{Git:}}} & git@github.com:WilliamCooper/\Sexpr{Project}.git\tabularnewline
+\textsf{\textsc{\textcolor{blue}{Original Data:}}} & /scr/raf/cooperw/\Sexpr{Project}/\Sexpr{Flight}R.nc, /scr/raf/cooperw/FRAPPErf04R.nc \tabularnewline
+\textsf{\textsc{\textcolor{blue}{nimbus configuration file:}}} & /scr/raf/cooperw/\Sexpr{Project}RHa (high rate) \tabularnewline
+\textsf{\textsc{\textcolor{blue}{Archived Subset Data:}}} & FRAPPErf09R.Rdata, FRAPPErf04R.Rdata \tabularnewline
+\textsf{\textsc{\textcolor{blue}{Git:}}} & https://github.com/WilliamCooper/\Sexpr{Project}.git\tabularnewline
 \end{tabular}
 
-\attachm{\Sexpr{thisFileName}.Rnw\\\Sexpr{thisFileName}.pdf\\SessionInfo}
+\attachm{\Sexpr{thisFileName}.Rnw\\\Sexpr{thisFileName}.pdf\\FRAPPErf04R.Rdata\\FRAPPErf09R.Rdata\\FRAPPERHa\\SessionInfo}
 %\cc{first attachment\\second\\3rd att}
 %\attach{attachment}
 %\attachm{first\\second} %\cc{first attachment\\second\\3rd att}
+
+<<get-cal-coefs>>=
+MQCFR <- system(sprintf("ncdump -h %s%s/%s%sR.nc | grep 'QCFR:Cal'", DataDirectory(), Project, Project, Flight), intern=TRUE)
+MQCF <- system(sprintf("ncdump -h %s%s/%s%sR.nc | grep 'QCF:Cal'", DataDirectory(), Project, Project, Flight), intern=TRUE)
+MADIFR <- system(sprintf("ncdump -h %s%s/%s%sR.nc | grep 'ADIFR:Cal'", DataDirectory(), Project, Project, Flight), intern=TRUE)
+MBDIFR <- system(sprintf("ncdump -h %s%s/%s%sR.nc | grep 'BDIFR:Cal'", DataDirectory(), Project, Project, Flight), intern=TRUE)
+MTHDG <- system(sprintf("ncdump -h %s%s/%s%sR.nc | grep 'THDG:Cal'", DataDirectory(), Project, Project, Flight), intern=TRUE)
+@
+
+
+\noindent Some relevant cal coefficients in netCDF files used:\\
+\Sexpr{MQCFR}\\\Sexpr{MADIFR}\\\Sexpr{MBDIFR}\\\Sexpr{MTHDG}\\\Sexpr{MQCF}
+
 <<save-system-info, echo=FALSE>>= 
 cat (toLatex(sessionInfo()), file="SessionInfo")
 
 @ 
 <<make-zip-archive, echo=TRUE, INCLUDE=TRUE>>=
-system (sprintf("zip %s.zip %s.Rnw %s.pdf SessionInfo", thisFileName, thisFileName, thisFileName))
+system (sprintf("zip %s.zip %s.Rnw %s.pdf FRAPPErf04R.Rdata FRAPPErf09R.Rdata FRAPPERHa SessionInfo", thisFileName, thisFileName, thisFileName))
 
 @ 
 
