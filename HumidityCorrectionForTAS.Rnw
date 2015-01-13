@@ -1,0 +1,536 @@
+%% LyX 2.1.2 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[12pt]{article}
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\usepackage[letterpaper]{geometry}
+\geometry{verbose,tmargin=3.54cm,bmargin=2.54cm,lmargin=2.54cm,rmargin=2.54cm,headheight=1cm,headsep=2cm,footskip=0.5cm}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{2}
+\setlength{\parskip}{\medskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{color}
+\usepackage{ifthen}
+\usepackage{amsmath}
+\PassOptionsToPackage{normalem}{ulem}
+\usepackage{ulem}
+\usepackage[unicode=true,colorlinks=true,linkcolor=black,urlcolor=blue]
+{hyperref}
+\usepackage{breakurl}
+
+\makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LyX specific LaTeX commands.
+%% Because html converters don't know tabularnewline
+\providecommand{\tabularnewline}{\\}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Textclass specific LaTeX commands.
+ \newlength{\lyxhang}
+ \IfFileExists{hanging.sty}{
+   \usepackage{hanging}
+   \newenvironment{hangparagraphs}
+     {%
+       \ifthenelse{\lengthtest{\parindent > 0pt}}%
+         {\setlength{\lyxhang}{\parindent}}%
+         {\setlength{\lyxhang}{2em}}%
+       \par\begin{hangparas}{\lyxhang}{1}%
+     }
+     {\end{hangparas}}
+ }{%else
+   \newenvironment{hangparagraphs}
+     {%
+       \ifthenelse{\lengthtest{\parindent > 0pt}}%
+         {\setlength{\lyxhang}{\parindent}}%
+         {\setlength{\lyxhang}{2em}}%
+       \begin{hangparas}%
+     }
+     {\end{hangparas}}
+   \newcommand{\hangpara}{\hangindent \lyxhang \hangafter 1 \noindent}
+   \newenvironment{hangparas}{\setlength{\parindent}{\z@}
+   \everypar={\hangpara}}{\par}
+ }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% User specified LaTeX commands.
+\input colordvi
+\usepackage{color}
+\fancyhead{}
+\fancyfoot[CE,CO]{}
+\newtoks{\addressee} \global\addressee={}
+\newdimen\longindent \longindent=3.5truein
+\fancyhead[L]{Memo to: \the\addressee \\ \datetoday \\ Page \thepage \hfill}
+\renewcommand{\headrulewidth}{0.0pt}
+\newenvironment{lyxlist}[1]
+{\begin{list}{}
+{\settowidth{\labelwidth}{#1}
+\setlength{\leftmargin}{\labelwidth}
+\addtolength{\leftmargin}{\labelsep}
+\renewcommand{\makelabel}[1]{##1\hfil}}}
+{\end{list}}
+\newcommand{\datetoday}{\number\day\space
+     \ifcase\month\or January\or February\or March\or April\or May\or
+     June\or July\or August\or September\or October\or November\or
+     December\fi
+     \space\number\year}
+\newcommand{\EOLmemo}{\null \vskip-1.5truein
+{\raggedright \textsf{\textsc{\large \textcolor{blue}{Earth Observing Laboratory}}}}\par
+{\raggedright \textsf{\textsl{\textcolor{blue}{Memorandum:}}}} \par \vskip6pt
+{\color{blue}{\hrule}}\par
+\vskip0.3truein \leftline{\hskip \longindent \datetoday} \vskip0.2truein
+\thispagestyle{empty}}
+\newcommand{\attachm}[1]{\begin{lyxlist}{Attachments:00}
+\item [Attachments:] {#1}
+\end{lyxlist}}
+\newcommand{\cc}[1]{\begin{lyxlist}{Attachments:00}
+\item [cc:] {#1}
+\end{lyxlist}}
+\newcommand{\attach}[1]{\begin{lyxlist}{Attachments:00}
+\item [Attachment:] {#1}
+\end{lyxlist}}
+%usage: \encl{A\\B\\C} or \cc{ma,e1\\name2\\name3}
+
+\makeatother
+
+\begin{document}
+\EOLmemo 
+
+\global\addressee={Algorithm File}  % >>change "File" to the "To:" name desired
+
+\begin{tabular}{ll}
+\textsf{\textsc{\textcolor{blue}{To:}}} & \the\addressee\tabularnewline
+\textsf{\textsc{\textcolor{blue}{From:}}} & Al Cooper\tabularnewline
+\textsf{\textsc{\textcolor{blue}{Subject:}}} & Calculation of humidity-corrected humidity\tabularnewline
+\end{tabular}
+
+\bigskip
+
+
+\section{Purpose}
+
+This memo documents how I think we should calculate true airspeed
+with incorporation of the effects of humidity. This is all documented
+in the \href{https://drive.google.com/open?id=0B1kIUH45ca5ATFV5d3QyQ0JpSjA&authuser=0}{processing-algorithms document}, but it is scattered around
+there so this is a consolidation from that document:
+
+
+\section{Math for documentation}
+
+
+\subsection{Effect of humidity on the properties of air}
+
+The specific heats and gas constant of moist air can be expressed
+as follows in terms of the water vapor pressure $e$, the specific
+heats for dry air ($c_{pd}=\frac{7}{2}R_{0},\, c_{vd}=\frac{5}{2}R_{0}$)
+and water vapor ($c_{pw}=4R_{0},\, c_{vw}=3R_{0}$), and the ratio
+of molecular weights of water to dry air ($\epsilon=M_{W}/M_{d}$).
+If $e$ is the water vapor pressure and $p$ the pressure (i.s., PSXC,
+\emph{not} the dry-air pressure PSXC\$-\$EWX), and if $R_{d}$ is
+the gas constant for dry air ($R_{0}/M_{w}$), the these are expressions
+for the moist-air gas constant ($R^{\prime}$), specific-heats, and
+$\gamma^{\prime}=\frac{c_{p}^{\prime}}{c_{^{\prime}v}}$:
+\begin{equation}
+R^{\prime}=R_{d}/[1+(\epsilon-1)\frac{e}{p}]\label{eq:moistR}
+\end{equation}
+\begin{equation}
+c_{v}^{\prime}=\frac{(p-e)R^{\prime}}{pR_{d}}\frac{5R_{0}}{2M_{d}}+\frac{eR^{\prime}}{pR_{w}}\frac{3R_{0}}{M_{w}}=c_{vd}\frac{R^{\prime}}{R_{d}}\left(1+\frac{1}{5}\frac{e}{p}\right)\label{eq:moistcv}
+\end{equation}
+
+
+\begin{equation}
+c_{p}^{\prime}=c_{pd}\frac{R^{\prime}}{R_{d}}\left(1+\frac{1}{7}\frac{e}{p}\right)\label{eq:moistcp}
+\end{equation}
+
+
+\begin{equation}
+\gamma\,^{\prime}=\gamma_{d}\frac{1+\frac{1}{7}\frac{e}{p}}{1+\frac{1}{5}\frac{e}{p}}\label{eq:moistgamma}
+\end{equation}
+
+
+These equations are exact and do not involve any approximations. 
+
+
+\subsection{Reference equations used in the calculations}
+
+\uline{Mach number:}
+\begin{hangparagraphs}
+\begin{equation}
+M^{\prime}=\left\{ \left(\frac{2c_{v}^{\prime}}{R^{\prime}}\right)\left[\left(\frac{p+q}{p}\right)^{R^{\prime}/c_{p}^{\prime}}-1\right]\right\} ^{1/2}\,\,\,.\label{eq:MachEquation}
+\end{equation}
+where $p$ and $q$ are respectively the static and dynamic pressure,
+after correction of both for the static defect. The correction function
+applied to these measurements
+involves the Mach number and other quantities based on the uncorrected
+measurements, which was necessary to avoid circularity in the definitions, so there
+will not be a problem with the sequence of these calculations.
+\end{hangparagraphs}
+
+\uline{Recovery factor:}
+
+The recovery factor is a function of the Mach number calculated as
+above. The equations used are:
+
+\emph{heated\_probes:} 
+\begin{equation}
+\alpha_{r}^{[h]}=0.988+0.053(\log_{10}M)+0.090(\log_{10}M)^{2}+0.091(\log_{10}M)^{3}\label{eq:RecFactorMachDep}
+\end{equation}
+
+
+\emph{unheated\_Rosemount~102AL: }
+
+\begin{equation}
+\alpha_{r}^{[u]}=0.9959+0.0283(\log_{10}M)+0.0374(\log_{10}M)^{2}+0.0762(\log_{10}M)^{3}\label{eq:RecFactorUnheated}
+\end{equation}
+
+
+The data from which these two relationships were determined did not
+specify the humidity during the test conditions, so in use it seems
+most reasonable to use the humidity-corrected value $M^{\prime}$
+in these last two equations.
+
+\uline{Air temperature:}
+
+It then is possible to find the air temperature $T_{a}$ from the
+above quantities and the recovery temperature $T_{r}$=RTX:
+\begin{hangparagraphs}
+\begin{eqnarray}
+T_{a} & = & \frac{T_{r}}{1+\dfrac{\alpha_{r}M^{\prime^{2}}R^{\prime}}{2c_{v}^{\prime}}}\label{eq:ATX}
+\end{eqnarray}
+
+\end{hangparagraphs}
+
+\uline{True airspeed} is then found from:
+\begin{hangparagraphs}
+\begin{equation}
+U_{a}=M^{\prime}\sqrt{\gamma\,^{\prime}R^{\prime}T_{a}}\label{eq:TASX}
+\end{equation}
+
+\end{hangparagraphs}
+\vfill\eject
+<<initialization,echo=FALSE,include=FALSE>>=
+
+opts_chunk$set(echo=FALSE, include=FALSE, fig.lp="fig:", fig.show='asis')
+opts_chunk$set(fig.width=6, fig.height=5, fig.pos="center", digits=4)
+thisFileName <- "HumidityCorrectionForTAS"
+require(Ranadu, quietly = TRUE, warn.conflicts=FALSE)
+require(ggplot2)
+require(grid)
+library(knitr)
+require(ggthemes)
+require(vioplot)
+require(plyr)
+Directory <- DataDirectory ()
+Flight <- "rf09"   			
+Project = "FRAPPE"			
+fname = sprintf("%s%s/%s%s.nc", Directory,Project,Project,Flight)
+Data <- getNetCDF (fname, standardVariables(c("RHUM", "TASHC", "RTX")))
+DataV <- Data[Data$TASX > 60, ]
+
+@
+
+
+\section{How large is the difference?}
+
+<<diff-plot, include=TRUE, fig.cap="\\textsl{Difference between moist-air and dry-air calculations of true airspeed, as a function of dew point and parameterized by the flight level. There is also a weak dependence on temperature, but that is minor in comparison to the variations shown in this plot. Assumed conditions were: for 850 hPa, Mach=0.35, temperature=30$^{\\circ}$C; for 700 hpa, Mach=0.4, temperature=$20^{\\circ}$C; for 500 hPa, Mach=0.45, temperature=$10^{\\circ}$C.}", fig.height=4.8>>=
+
+Mach <- 0.35
+TT <- 30
+PP <- 850
+DP <- c(-10:TT)
+TASm <- TrueAirspeed(Mach, TT, MurphyKoop(DP,PP)/PP)
+TASd <- TrueAirspeed(Mach, TT)
+plot(DP, TASm-TASd, type='l', col='blue', ylab="TAS error [m/s]", 
+     xlab="dew point [C]", ylim=c(0,1.5), lwd=2)
+Mach <- 0.45
+TT <- 10
+PP <- 500
+DP <- c(-10:TT)
+TASm <- TrueAirspeed(Mach, TT, MurphyKoop(DP,PP)/PP)
+TASd <- TrueAirspeed(Mach, TT)
+points(DP, TASm-TASd, type='l', col='darkgreen', lwd=2)
+Mach <- 0.4
+TT <- 20
+PP <- 700
+DP <- c(-10:TT)
+TASm <- TrueAirspeed(Mach, TT, MurphyKoop(DP,PP)/PP)
+TASd <- TrueAirspeed(Mach, TT)
+points(DP, TASm-TASd, type='l', col='red', lwd=2)
+legend('bottomright', legend=c("850 hPa", "700 hPa", "500 hPa"), lwd=2, 
+       title='flight level:', lty=1, col=c('blue', 'red', 'darkgreen'))
+
+@
+
+To help assess how important it is to calculate true airspeed with specific heats and
+gas constant appropriate for moist air, Fig.~\ref{fig:diff-plot} was constucted to show the error that arises in the calculated true airspeed if dry-air specific heats and gas constant are used instead of moist-air values. The plot is meant to apply to conditions representative of those encountered by the C-130; the errors are still larger for the GV because its flight speed is greater. The error in true airspeed translates directly into an error in the longitudinal component of the measured wind, so to meet our target uncertainty of 0.3\,m/s uncertainty in wind it is important to use moist-air values even for modest dew-point values like 0--$10^{\circ}$C. Specific errors for FRAPPE flights will be shown later in this note.\vfill\eject
+
+\section{Handling errors that arise from bad humidity measurements}
+
+The most serious source of errors in the humidity measurements is
+overheating of the dew-point sensors during and shortly after rapid
+descents. The error that occurs is particularly serious because when
+the dew point becomes erroneously high the corresponding vapor pressure,
+increasing exponentially as the dew point increases, can produce errors
+exceeding a factor of two in vapor pressure and so leading to unacceptable
+errors. Some ways to reduce the effect of such errors will be explored
+in this section.
+
+\subsection{Characteristic levels of humidity in FRAPPE}
+
+It is useful first to consider typical relative humidity values for FRAPPE, to see how important the humidity correction is likely to be. Figure \ref{fig:relative-humidity1} shows a histogram of relative humidity for one FRAPPE flight, and Fig.~\ref{fig:relative-humidity2} shows typical values of the ratio of water vapor pressure to ambient pressure. There is a wide range of relative humidity, but a typical value is about 50\% and there are few measurements near 0\%, so 0\% (i.e., neglecting the humidity correction) is probably a poor choice.
+<<relative-humidity, include=TRUE, fig.cap=c("Distribution of measurements of relative humidity, FRAPPE Flight 9", "Histogram of measurements of the ratio of water vapor pressure to total pressure for the same flight as in the preceding histogram."), fig.height=4>>=
+hist (DataV$RHUM, xlim=c(0,150))
+hist (DataV$EWX / DataV$PSXC, breaks=20)
+print (mean ((DataV$EWX / DataV$PSXC), na.rm=TRUE))
+@
+If it were possible to consider measurement values in the future, as is possible in post-processing, one could use a relative humidity level from a period after recovery from the descent as an appropriate value to use during erroneous measurements, but in the absence of this option it appears that some choice is needed and, because the correction factors mostly scale as $e/p$ a representative value of that might be the best choice. The mean value from this flight is about 0.013, but the errors from descent occur in regions where the humidity is above the flight average, so perhaps 0.015 (i.e., setting $e=0.015p$) is a reasonable estimate as long as it doesn't cause the water vapor pressure to exceed the equilibrium value at the measured temperature.
+\vfill\eject
+\subsection{The effect of the humidity correction}
+
+<<dry-vs-moist-tas, include=TRUE, fig.cap=c("True airspeeds TASdry and TASmoist, the former based on dry-air specific heats and the latter on moist-air values.", "The difference TASMoist - TASDry for FRAPPE flight 9.")>>=
+DataV$Mdry <- MachNumber (DataV$PSXC, DataV$QCXC)
+DataV$ATdry <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC)
+DataV$TASDry <- TrueAirspeed (MachNumber (DataV$PSXC, DataV$QCXC), DataV$ATdry)
+EoverP <- DataV$EWX / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX)
+DataV$TASMoist <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff1 <- DataV$TASMoist-DataV$TASDry
+plotWAC (DataV[, c("Time", "TASDry", "TASMoist")], col=c('blue', 'red'), lwd=c(3,1), lty=c(1,2))
+plotWAC (DataV[, c("Time", "Diff1")], ylab="TAS difference, m/s, moist-dry")
+@
+
+Figure \ref{fig:dry-vs-moist-tas1} shows a plot of the true airspeed calculated for dry air (TASDry) along with that calculated for moist air with the measured humidity (TASMoist). On the scale of this plot, it is hard to see a difference, so Fig.~\ref{fig:dry-vs-moist-tas2} shows the difference between the two calculations. There are two points to be made from this plot:
+\begin{enumerate}
+  \item The correction for humidity is around 0.4\,m/s for a major part of this flight, only dropping to around 0.1\,m/s for the flight segment at around 20,000 ft. The humidity correction is therefore large enough to matter, even for this flight in the local area.
+  \item The overheating dew-point sensors produce erroneous values for a period around 20:00, where the error is around 1.5\,m/s. This needs to be corrected, but setting the humidity to zero (i.e., returning to the dry calculation) still makes an error of around 0.3\,m/s.
+\end{enumerate}
+
+\subsection{Correction options for bad humidity data:}
+
+Instead of returning to the dry-air calculation in cases of overheating, three other options would be to limit the humidity to 100\%, set the humidity to about 50\% when the dew point exceeds the temperature, or set the ratio $e/p$ to some fixed value $r=0.012$ (for example) with the further limitation that $e=rp$ is limited to be less than the equilibrium vapor pressure at the air temperature. 
+
+
+<<adjusted-humidity, include=TRUE, fig.cap="The differences vs the dry-air calculation of true airspeed for five corrections applied when the relative humidity exceeds 105\\%: Diff1 (blue), use humidity as measured; Diff2 (red), use 100\\% relative humidity; Diff3 (green), use $e/p=0.012$; Diff4 (black), use the dry-air calculation; Diff5 (orange), use 50\\% relative humidity.">>=
+
+# limit humidity to less than 100%
+DataV$EWEQ <- MurphyKoop (DataV$ATX, DataV$PSXC)
+Test <- !is.na (DataV$EWX) & (DataV$EWX > 1.05*DataV$EWEQ)
+DataV$EWX1 <- DataV$EWX
+DataV$EWX3 <- DataV$EWX
+DataV$EWX1[Test] <- DataV$EWEQ[Test]
+DataV$EWX3[Test] <- 0.5*DataV$EWEQ[Test]
+EoverP <- DataV$EWX1 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX1)
+DataV$TASM2 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff2 <- DataV$TASM2-DataV$TASD
+EoverP <- DataV$EWX3 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX3)
+DataV$TASM5 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff5 <- DataV$TASM5-DataV$TASD
+DataV$EWX2 <- DataV$EWX
+DataV$EWX2[Test] <- 0.012*DataV$PSXC[Test]
+Test2 <- !is.na (DataV$EWX2) & (DataV$EWX2 > DataV$EWEQ)
+DataV$EWX2[Test2] <- DataV$EWEQ[Test2]
+EoverP <- DataV$EWX2 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX2)
+DataV$TASM3 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff3 <- DataV$TASM3-DataV$TASD
+DataV$Diff4 <- DataV$Diff1
+DataV$Diff4[Test] <- 0.035
+plotWAC (DataV[, c("Time", "Diff1", "Diff2", "Diff3", "Diff4", "Diff5")],
+         col=c('blue', 'red', 'green', 'black', 'darkorange'), lwd=c(2,2,2,3), 
+         legend.position='topright', ylab="Diffy")
+@
+\vfill\eject
+The result of these various correction options are shown in Fig.~\ref{fig:adjusted-humidity}. In this particular case, the options that use 0\% or 100\% relative humidity (black or red lines) still introduce significant error, while using either 50\% relative humidity or $e=0.012p$ produces only small errors. 
+
+<<adjusted-humidity-2, include=TRUE, fig.cap="The same as the preceding figure but for the limited time range around the overheating event.">>=
+
+DataV <- Data[setRange(Data$Time, 195500, 201000),]
+DataV$Mdry <- MachNumber (DataV$PSXC, DataV$QCXC)
+DataV$ATdry <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC)
+DataV$TASDry <- TrueAirspeed (MachNumber (DataV$PSXC, DataV$QCXC), DataV$ATdry)
+EoverP <- DataV$EWX / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX)
+DataV$TASMoist <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff1 <- DataV$TASMoist-DataV$TASDry
+# limit humidity to less than 100%
+DataV$EWEQ <- MurphyKoop (DataV$ATX, DataV$PSXC)
+Test <- !is.na (DataV$EWX) & (DataV$EWX > 1.05*DataV$EWEQ)
+DataV$EWX1 <- DataV$EWX
+DataV$EWX3 <- DataV$EWX
+DataV$EWX1[Test] <- DataV$EWEQ[Test]
+DataV$EWX3[Test] <- 0.5*DataV$EWEQ[Test]
+EoverP <- DataV$EWX1 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX1)
+DataV$TASM2 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff2 <- DataV$TASM2-DataV$TASD
+EoverP <- DataV$EWX3 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX3)
+DataV$TASM5 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff5 <- DataV$TASM5-DataV$TASD
+DataV$EWX2 <- DataV$EWX
+DataV$EWX2[Test] <- 0.012*DataV$PSXC[Test]
+Test2 <- !is.na (DataV$EWX2) & (DataV$EWX2 > DataV$EWEQ)
+DataV$EWX2[Test2] <- DataV$EWEQ[Test2]
+EoverP <- DataV$EWX2 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX2)
+DataV$TASM3 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff3 <- DataV$TASM3-DataV$TASD
+DataV$Diff4 <- DataV$Diff1
+DataV$Diff4[Test] <- 0.035
+plotWAC (DataV[, c("Time", "Diff1", "Diff2", "Diff3", "Diff4", "Diff5")],
+         col=c('blue', 'red', 'green', 'black', 'darkorange'), lwd=c(2,2,2,3), 
+         legend.position='topright', ylab="Diffy [m/s]", ylim=c(0,1.4))
+@
+\vfill\eject
+Figure \ref{fig:adjusted-humidity-2} shows an expanded view of these corrections for the time period 19:55:00 to 20:10:00. 
+
+<<adjusted-humidity-3, include=TRUE, fig.cap="As in Fig.\\ \\ref{fig:adjusted-humidity-2} but with the measured humidity EWX set to missing-value for the time period 19:56:00 to 20:06:00, to expand the region where the correction is applied.">>=
+
+Rng <- setRange (Data$Time, 195600, 200600) - getIndex(Data$Time, 195500)
+DataV$EWX[Rng] <- NA
+
+# limit humidity to less than 100%
+DataV$EWEQ <- MurphyKoop (DataV$ATX, DataV$PSXC)
+DataV$EWX1 <- DataV$EWX
+DataV$EWX3 <- DataV$EWX
+Test <- is.na(DataV$EWX)
+DataV$EWX1[Test] <- DataV$EWEQ[Test]
+DataV$EWX3[Test] <- 0.5*DataV$EWEQ[Test]
+EoverP <- DataV$EWX1 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX1)
+DataV$TASM2 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff2 <- DataV$TASM2-DataV$TASD
+EoverP <- DataV$EWX3 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX3)
+DataV$TASM5 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff5 <- DataV$TASM5-DataV$TASD
+DataV$EWX2 <- DataV$EWX
+DataV$EWX2[Test] <- 0.012*DataV$PSXC[Test]
+Test2 <- !is.na (DataV$EWX2) & (DataV$EWX2 > DataV$EWEQ)
+DataV$EWX2[Test2] <- DataV$EWEQ[Test2]
+EoverP <- DataV$EWX2 / DataV$PSXC
+DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX2)
+DataV$TASM3 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+DataV$Diff3 <- DataV$TASM3-DataV$TASD
+DataV$Diff4 <- DataV$Diff1
+DataV$Diff4[Test] <- 0.035
+plotWAC (DataV[, c("Time", "Diff1", "Diff2", "Diff3", "Diff4", "Diff5")],
+         col=c('blue', 'red', 'green', 'black', 'darkorange'), lwd=c(2,2,2,3), 
+         legend.position='topright', ylab="Diffy [m/s]", ylim=c(0,1.4))
+@
+\vfill\eject
+There are still erroneous measurements associated with the times where the humidity is 
+increasing toward or decreasing below 100\% relative humidity and so is not flagged here 
+as erroneous. If the region from 19:56:00 to 20:06:00 is considered to have invalid humidity measurements, the values of EWX can be set to missing-value and the same correction algorithm applied as above. Figure \ref{fig:adjusted-humidity-3} shows the result of this approach. Again, choices $e/p=0.012$ (green line) or relative humidity 50\% (orange lime) introduce lower jumps in the TAS and produce reasonable values through the overheating episode, so one of these choices seems best for this case. Perhaps $e/p=0.012$ is the best.
+
+\subsection{Survey of FRAPPE flights}
+
+The preceding used just one example of overheating, so it is important to review many more flights before deciding which approach is best. Therefore, the following plots were generated for all the FRAPPE flights, starting with Fig.~9. These plots are appended to this memo. Most of these flights do not show any problems. The significant exceptions are flights 4 and 9. Other flights with brief periods needing correction are flights 1, 3, 5, 11, and 14. In all these cases, the correction procedure based on setting the humidity to 50\% when the 
+measurements are bad produced improved results over either 0\% or 100\% relative humidity and produced reasonable results without introducing significant discontinuities. For FRAPPE, this seems to be the best choice.
+
+
+
+\section{Suggested algorithm}
+
+\subsection{The basic calculation of humidity-corrected airspeed}
+
+\begin{enumerate}
+  \item Calculate the Mach number from PSXC, QCXC, and EWX. The latter is needed to make the humidity corrections to the specific heats and moist-air gas constant. The equation for this calculation is (\ref{eq:MachEquation}).
+  \item Calculate the air temperature using this Mach number, the measured recovery temperature, the appropriate recovery factor (which is a function of Mach number), and the ratio of the water vapor pressure EWX to the ambient pressure PSXC. Again, the latter is needed in order to calculate the corrections to the specific heats and gas constant for humidity. The equation is (\ref{eq:ATX}). 
+  \item Calculate the humidity-corrected true airspeed from the Mach number, the air temperature, and the ratio of water vapor pressure to total pressure. The latter is still needed to make the humidity correction because the equation for the calculation, Eq.~(\ref{eq:TASX}), still requires additional corrections in addition to those already made to the Mach number and the air temperature.
+\end{enumerate}
+
+\subsection{Handling errors in the humidity measurement}
+
+
+\begin{enumerate}
+  \item In data review, identify regions where the dew point measurements (if used as primary) suffer from overheating. For example, the region from 19:56:00 to 20:06:00 on flight 9 should be flagged. That covers more than the region where the measured relative humidity exceeds 100\%, but it excludes the erroneous measurements while the dew-point measurement is overshooting but has not reached 100\%. In these regions, flag EWX as missing. (If a substitute is available and it is practical to do so, it would also be possible to use a different vapor pressure measurement; in the flight-9 case, the measurements from the UV hygrometer appear to be acceptable through the period of dew-point-sensor overheating.)
+  \item For the purpose of calculating humidity-corrected specific heats and gas constant for moist air, find the vapor pressure EWSAT corresponding to the equilibrium vapor pressure at the measured temperature (ATX). This will be given by the Murphy-Koop equation using ATX as input in place of the usual dew point.
+  \item For any time when EWX either exceeds 1.05*EWSAT or is missing, set EWX=0.5*EWSAT. Also  set a flag that indicates that this has been done.
+  \item Proceed with the usual TAS calculation.
+\end{enumerate}
+
+
+
+\begin{center}
+\textsf{\textcolor{blue}{-- End of Memo --}}
+\par\end{center}
+\vskip1truein
+
+Reproducibility:
+
+\begin{tabular}{ll}
+\textsf{\textsc{\textcolor{blue}{Project:}}} & FRAPPE\tabularnewline
+\textsf{\textsc{\textcolor{blue}{Programs:}}} & \Sexpr{thisFileName}.Rnw\tabularnewline
+\textsf{\textsc{\textcolor{blue}{Original Data:}}} & /scr/raf\_data/\Sexpr{Project}/field\_data
+\tabularnewline
+\textsf{\textsc{\textcolor{blue}{GoogleDoc:}}} & \href{https://drive.google.com/open?id=0B1kIUH45ca5Adno0Szd5T3lOT2c&authuser=0}{HumidityCorrectionForTAS.Rnw}, \href{https://drive.google.com/open?id=0B1kIUH45ca5AcVBwY0UwZFNMdnc&authuser=0}{HumidityCorrectionForTAS.pdf}\tabularnewline
+\end{tabular}
+
+
+<<all-flight-review, include=TRUE, fig.height=7, fig.cap='As for Fig. 5, for FRAPPE flights as labeled.'>>=
+
+
+op <- par (mar=c(5,5,2,1)+0.1)
+layout(matrix(1:2, nrow=2), heights = c(5,5))
+for (nf in 1:15) {
+  Flight <- sprintf("rf%02d", nf)    		
+  fname = sprintf("%s%s/%s%s.nc", Directory,Project,Project,Flight)
+  Data <- getNetCDF (fname, standardVariables(c("RHUM", "TASHC", "RTX")))
+  DataV <- Data[Data$TASX > 60, ]
+  DataV$Mdry <- MachNumber (DataV$PSXC, DataV$QCXC)
+  DataV$ATdry <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC)
+  DataV$TASDry <- TrueAirspeed (MachNumber (DataV$PSXC, DataV$QCXC), DataV$ATdry)
+  EoverP <- DataV$EWX / DataV$PSXC
+  DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+  DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX)
+  DataV$TASMoist <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+  DataV$Diff1 <- DataV$TASMoist-DataV$TASDry
+  DataV$EWEQ <- MurphyKoop (DataV$ATX, DataV$PSXC)
+  Test <- is.na(DataV$EWX) | (!is.na (DataV$EWX) & (DataV$EWX > 1.05*DataV$EWEQ))
+  DataV$EWX1 <- DataV$EWX
+  DataV$EWX3 <- DataV$EWX
+  DataV$EWX1[Test] <- DataV$EWEQ[Test]
+  DataV$EWX3[Test] <- 0.5*DataV$EWEQ[Test]
+  EoverP <- DataV$EWX1 / DataV$PSXC
+  DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+  DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX1)
+  DataV$TASM2 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+  DataV$Diff2 <- DataV$TASM2-DataV$TASD
+  EoverP <- DataV$EWX3 / DataV$PSXC
+  DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+  DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX3)
+  DataV$TASM5 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+  DataV$Diff5 <- DataV$TASM5-DataV$TASD
+  DataV$EWX2 <- DataV$EWX
+  DataV$EWX2[Test] <- 0.012*DataV$PSXC[Test]
+  Test2 <- !is.na (DataV$EWX2) & (DataV$EWX2 > DataV$EWEQ)
+  DataV$EWX2[Test2] <- DataV$EWEQ[Test2]
+  EoverP <- DataV$EWX2 / DataV$PSXC
+  DataV$Mmoist <- MachNumber (DataV$PSXC, DataV$QCXC, EoverP)
+  DataV$ATmoist <- AirTemperature (DataV$RTX, DataV$PSXC, DataV$QCXC, DataV$EWX2)
+  DataV$TASM3 <- TrueAirspeed (DataV$Mmoist, DataV$ATmoist, EoverP)
+  DataV$Diff3 <- DataV$TASM3-DataV$TASD
+  DataV$Diff4 <- DataV$Diff1
+  DataV$Diff4[Test] <- 0.035
+  plotWAC (DataV[, c("Time", "Diff1", "Diff2", "Diff3", "Diff4", "Diff5")],
+           col=c('blue', 'red', 'green', 'black', 'darkorange'), lwd=c(2,2,2,3), 
+           legend.position='topright', ylab="Diffy")
+  title(sprintf ("FRAPPE flight %s", Flight), cex.main=0.75)
+}
+
+@
+
+\end{document}
